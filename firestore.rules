@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check for admin role
+    function isAdmin() {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Playlists: Publicly readable, accessible by owner, or admin
+    match /playlists/{playlistId} {
+      allow read: if resource.data.public == true || 
+                   (request.auth != null && (request.auth.uid == resource.data.userId || isAdmin()));
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+    
+    // User Profiles: Accessible by the owner or an admin
+    match /users/{userId} {
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+    }
+
+    // Settings: Global configuration managed by admins
+    match /settings/{docId} {
+      // Allow everyone to read the GDrive API settings so music plays for guests
+      allow read: if docId == 'gdrive_api' || (request.auth != null);
+      allow write: if isAdmin();
+    }
+  }
+}

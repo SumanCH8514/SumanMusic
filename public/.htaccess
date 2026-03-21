@@ -1,0 +1,21 @@
+# Add MIME type for Web Manifest
+AddType application/manifest+json .json
+AddType application/manifest+json manifest.json
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Redirect crawlers to index.php for sharing links (tracks, albums, playlists)
+  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Embedly|googlebot|TelegramBot) [NC]
+  RewriteCond %{QUERY_STRING} (trackId|album|name)= [NC]
+  RewriteRule ^app/library$ index.php [L,QSA]
+
+  # Standard SPA routing - rewritten to index.php to allow for metadata injection
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.php [L]
+</IfModule>
+

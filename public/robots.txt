@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /app
+Disallow: /app/admin-panel
+
+Sitemap: https://songs.sumanonline.com/sitemap.xml
