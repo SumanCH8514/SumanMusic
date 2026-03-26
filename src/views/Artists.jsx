@@ -14,6 +14,7 @@ const Artists = () => {
   const [artistInfo, setArtistInfo] = useState(null);
   const [loadingArtistInfo, setLoadingArtistInfo] = useState(false);
   const [isBioExpanded, setIsBioExpanded] = useState(false);
+  const [listScrollPos, setListScrollPos] = useState(0);
 
   // Group unique artists (splitting collaborations)
   const artists = React.useMemo(() => songs.reduce((acc, song) => {
@@ -50,9 +51,14 @@ const Artists = () => {
     if (artistParam) {
       const artist = artistList.find(a => a.name === artistParam);
       if (artist && artist.name !== selectedArtist?.name) {
+        setArtistInfo(null);
+        setLoadingArtistInfo(true);
         setSelectedArtist(artist);
+        // Ensure scroll resets when opening artist details
+        document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } else if (selectedArtist !== null) {
+      setArtistInfo(null);
       setSelectedArtist(null);
     }
   }, [searchParams, artistList, selectedArtist]);
@@ -92,6 +98,15 @@ const Artists = () => {
     }
   }, [selectedArtist]);
 
+  React.useEffect(() => {
+    if (selectedArtist === null && listScrollPos > 0) {
+      // Must wait momentarily for the layout to expand the grid back
+      setTimeout(() => {
+        const scrollContainer = document.querySelector('.overflow-y-auto');
+        if (scrollContainer) scrollContainer.scrollTo({ top: listScrollPos });
+      }, 10);
+    }
+  }, [selectedArtist, listScrollPos]);
 
   const renderSong = (song) => (
     <div 
@@ -137,7 +152,6 @@ const Artists = () => {
           {selectedArtist && (
              <button 
                onClick={() => {
-                 setSelectedArtist(null);
                  setSearchParams({});
                }}
                className="p-2 rounded-full bg-bg-surface hover:bg-bg-surface/80 transition-colors"
@@ -243,7 +257,8 @@ const Artists = () => {
                   : "flex items-center gap-4 p-3 rounded-2xl bg-bg-surface/30 hover:bg-bg-surface/50 border border-border-main/5"
               )}
               onClick={() => {
-                setSelectedArtist(artist);
+                const scrollContainer = document.querySelector('.overflow-y-auto');
+                if (scrollContainer) setListScrollPos(scrollContainer.scrollTop);
                 setSearchParams({ artist: artist.name });
               }}
             >

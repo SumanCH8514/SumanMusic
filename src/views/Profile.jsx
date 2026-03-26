@@ -42,6 +42,7 @@ const SelectionModal = ({ isOpen, onClose, title, options, selectedValue, onSele
   );
 };
 
+// eslint-disable-next-line no-unused-vars
 const SettingsOption = ({ icon: Icon, label, value, onClick, danger }) => (
   <div 
     onClick={onClick}
@@ -69,7 +70,7 @@ const SettingsOption = ({ icon: Icon, label, value, onClick, danger }) => (
 const Profile = () => {
   const { user, isGuest, logout, updateUserProfile, connectPersonalDrive, personalDriveToken } = useAuth();
   const { isPersonalDriveEnabled } = useGDrive();
-  const { theme, toggleTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { librarySource, setLibrarySource, refreshSongs } = usePlayer();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -143,7 +144,7 @@ const Profile = () => {
       showToast("Personal Google Drive Connected!", "success");
       setLibrarySource('hybrid');
       setTimeout(() => refreshSongs(), 500);
-    } catch (err) {
+    } catch {
       showToast("Failed to connect Google Drive.", "error");
     }
   };

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Heart, Play, Clock, MoreHorizontal, ListMusic, LayoutGrid, List, Music2, Trash2, Music, Globe, Lock, Share2, PlayCircle, ArrowLeft, Square, EyeOff } from 'lucide-react';
 import { usePlayer } from '../context/usePlayer';
@@ -12,7 +13,7 @@ import SongImage from '../components/SongImage';
 const filters = ['Tracks', 'Recent', 'Artists', 'Albums', 'Playlists', 'Liked'];
 
 const Library = () => {
-  const { songs, playSong, playQueue, currentSong, isPlaying, setOptionsSong, likedSongs, toggleLike } = usePlayer();
+  const { songs, playSong, playQueue, currentSong, isPlaying, setOptionsSong, likedSongs } = usePlayer();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,24 +28,33 @@ const Library = () => {
   const [artistInfo, setArtistInfo] = useState(null);
   const [loadingArtistInfo, setLoadingArtistInfo] = useState(false);
   const [isBioExpanded, setIsBioExpanded] = useState(false);
+  const [listScrollPos, setListScrollPos] = useState(0);
+  const activeFilterRef = useRef(null);
+
+  useEffect(() => {
+    if (activeFilterRef.current) {
+      activeFilterRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [activeFilter]);
+
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const isPlaylistPlaying = isPlaying && selectedPlaylist?.songs?.some(s => s.id === currentSong?.id);
-
   // Sync filter state and selected entities with URL search params
   React.useEffect(() => {
     const filter = searchParams.get('filter');
-    const artistParam = searchParams.get('artist');
-    const albumParam = searchParams.get('album');
 
     if (filter && filters.includes(filter)) {
       setActiveFilter(filter);
     }
-  }, [searchParams, filters]);
+  }, [searchParams]);
 
   const artistList = useMemo(() => {
     const artists = songs.reduce((acc, song) => {
@@ -74,19 +84,29 @@ const Library = () => {
     const albums = songs.reduce((acc, song) => {
       const albumName = song.album || 'Unknown Album';
       const artistName = song.artist || 'Unknown Artist';
-      const key = `${albumName}-${artistName}`;
-      if (!acc[key]) {
-        acc[key] = {
+      
+      if (!acc[albumName]) {
+        acc[albumName] = {
           name: albumName,
-          artist: artistName,
+          artists: new Set(),
           songs: [],
           cover: song.cover
         };
       }
-      acc[key].songs.push(song);
+      
+      const individualArtists = artistName.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)
+        .map(name => name.trim())
+        .filter(name => name.length > 0);
+      
+      individualArtists.forEach(artist => acc[albumName].artists.add(artist));
+      acc[albumName].songs.push(song);
       return acc;
     }, {});
-    return Object.values(albums).sort((a, b) => a.name.localeCompare(b.name));
+
+    return Object.values(albums).map(album => ({
+      ...album,
+      artist: Array.from(album.artists).join(', ')
+    })).sort((a, b) => a.name.localeCompare(b.name));
   }, [songs]);
 
   const sortedSongs = useMemo(() => {
@@ -108,6 +128,7 @@ const Library = () => {
         const playlist = playlists.find(p => p.id === idParam || p.name === nameParam);
         if (playlist && playlist.id !== selectedPlaylist?.id) {
           setSelectedPlaylist(playlist);
+          document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
         }
       } else if (selectedPlaylist !== null) {
         setSelectedPlaylist(null);
@@ -122,6 +143,7 @@ const Library = () => {
         const artist = artistList.find(a => a.name === artistParam);
         if (artist && artist.name !== selectedArtist?.name) {
           setSelectedArtist(artist);
+          document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
         }
       } else if (selectedArtist !== null) {
         setSelectedArtist(null);
@@ -136,6 +158,7 @@ const Library = () => {
         const album = albumList.find(a => a.name === albumParam && (!artistParam || a.artist === artistParam));
         if (album && album.name !== selectedAlbum?.name) {
           setSelectedAlbum(album);
+          document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
         }
       } else if (selectedAlbum !== null) {
         setSelectedAlbum(null);
@@ -153,6 +176,16 @@ const Library = () => {
       }
     }
   }, [searchParams, artistList, albumList, playlists, songs, playSong, currentSong, selectedPlaylist, selectedArtist, selectedAlbum]);
+
+  React.useEffect(() => {
+    if (!selectedArtist && !selectedAlbum && !selectedPlaylist && listScrollPos > 0) {
+      // Must wait momentarily for the layout to expand the grid back
+      setTimeout(() => {
+        const scrollContainer = document.querySelector('.overflow-y-auto');
+        if (scrollContainer) scrollContainer.scrollTo({ top: listScrollPos });
+      }, 10);
+    }
+  }, [selectedArtist, selectedAlbum, selectedPlaylist, listScrollPos]);
 
   React.useEffect(() => {
     const fetchArtistDetails = async (name) => {
@@ -225,7 +258,7 @@ const Library = () => {
             "rounded-xl overflow-hidden bg-bg-surface shadow-md relative shrink-0",
             "w-12 h-12"
           )}>
-            <SongImage src={song.cover} alt={song.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+            <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
             {currentSong?.id === song.id && isPlaying ? (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[2px]">
                  <PlayingVisualizer className="h-5 gap-[2px]" />
@@ -287,11 +320,15 @@ const Library = () => {
          {filters.map(filter => (
            <button 
              key={filter}
+             ref={activeFilter === filter ? activeFilterRef : null}
              onClick={() => {
+               const scrollContainer = document.querySelector('.overflow-y-auto');
+               if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
                setSearchParams({ filter });
                setSelectedArtist(null);
                setSelectedAlbum(null);
                setSelectedPlaylist(null);
+               setListScrollPos(0);
              }}
              className={cn(
                "px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm",
@@ -342,7 +379,7 @@ const Library = () => {
                   className="w-64 h-64 rounded-3xl overflow-hidden bg-bg-base shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center shrink-0 border border-white/5 relative mb-8"
                 >
                   {selectedPlaylist.songs?.length > 0 ? (
-                    <SongImage src={selectedPlaylist.songs[0].cover} alt={selectedPlaylist.name} className="w-full h-full object-cover" />
+                    <SongImage src={selectedPlaylist.songs[0].thumbnail || selectedPlaylist.songs[0].cover} alt={selectedPlaylist.name} className="w-full h-full object-cover" />
                   ) : (
                     <Music2 className="w-24 h-24 text-primary/20" />
                   )}
@@ -403,6 +440,8 @@ const Library = () => {
                     : "flex-col gap-3 p-3 rounded-2xl bg-bg-surface/30 hover:bg-bg-surface/60 border border-border-main/5 hover:border-primary/20 backdrop-blur-sm"
                 )}
                 onClick={() => {
+                  const scrollContainer = document.querySelector('.overflow-y-auto');
+                  if (scrollContainer) setListScrollPos(scrollContainer.scrollTop);
                   setSearchParams(prev => {
                     const next = new URLSearchParams(prev);
                     next.set('filter', 'Playlists');
@@ -416,7 +455,7 @@ const Library = () => {
                    viewMode === 'list' ? "w-16 h-16" : "w-full aspect-square"
                  )}>
                     {playlist.songs?.[0]?.cover ? (
-                      <SongImage src={playlist.songs[0].cover} alt={playlist.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <SongImage src={playlist.songs[0].thumbnail || playlist.songs[0].cover} alt={playlist.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                     ) : (
                       <Music2 className="w-8 h-8 text-primary" />
                     )}
@@ -503,7 +542,7 @@ const Library = () => {
                   className="w-56 h-56 rounded-full overflow-hidden bg-bg-surface shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center shrink-0 border border-white/5 relative mb-8 group"
                 >
                   <SongImage 
-                    src={artistInfo?.strArtistThumb || selectedArtist.cover} 
+                    src={artistInfo?.strArtistThumb || selectedArtist.thumbnail || selectedArtist.cover} 
                     alt={selectedArtist.name} 
                     className={cn(
                       "w-full h-full object-cover transition-all duration-700",
@@ -588,6 +627,8 @@ const Library = () => {
                   viewMode === 'list' ? "items-center gap-4 hover:bg-bg-surface/50 p-2 rounded-2xl" : "flex-col gap-3 p-3 rounded-2xl bg-bg-surface/40 hover:bg-bg-surface/60 border border-border-main/5"
                 )}
                 onClick={() => {
+                  const scrollContainer = document.querySelector('.overflow-y-auto');
+                  if (scrollContainer) setListScrollPos(scrollContainer.scrollTop);
                   setSearchParams(prev => {
                     const next = new URLSearchParams(prev);
                     next.set('filter', 'Artists');
@@ -600,7 +641,7 @@ const Library = () => {
                    "rounded-full overflow-hidden bg-bg-surface shadow-lg relative shrink-0",
                    viewMode === 'list' ? "w-16 h-16" : "w-full aspect-square"
                  )}>
-                     <SongImage src={artist.cover} alt={artist.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                     <SongImage src={artist.thumbnail || artist.cover} alt={artist.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                  </div>
                  <div className="flex-1 min-w-0">
                     <p className={cn(
@@ -638,7 +679,7 @@ const Library = () => {
                   animate={{ opacity: 1, scale: 1 }}
                   className="w-64 h-64 rounded-3xl overflow-hidden bg-bg-base shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center shrink-0 border border-white/5 relative mb-8"
                 >
-                   <SongImage src={selectedAlbum.cover} alt={selectedAlbum.name} className="w-full h-full object-cover" />
+                   <SongImage src={selectedAlbum.thumbnail || selectedAlbum.cover} alt={selectedAlbum.name} className="w-full h-full object-cover" />
                 </motion.div>
 
                 <div className="text-center w-[90vw] md:w-full mx-auto px-2 md:px-4 overflow-hidden">
@@ -681,12 +722,14 @@ const Library = () => {
           ) : (
             albumList.map((album) => (
               <div 
-                key={`${album.name}-${album.artist}`} 
+                key={album.name} 
                 className={cn(
                   "flex group cursor-pointer transition-all duration-300",
                   viewMode === 'list' ? "items-center gap-4 hover:bg-bg-surface/50 p-2 rounded-2xl" : "flex-col gap-3 p-3 rounded-2xl bg-bg-surface/40 hover:bg-bg-surface/60 border border-border-main/5"
                 )}
                 onClick={() => {
+                  const scrollContainer = document.querySelector('.overflow-y-auto');
+                  if (scrollContainer) setListScrollPos(scrollContainer.scrollTop);
                   setSearchParams(prev => {
                     const next = new URLSearchParams(prev);
                     next.set('filter', 'Albums');
@@ -699,7 +742,7 @@ const Library = () => {
                    "rounded-xl overflow-hidden bg-bg-surface shadow-lg relative shrink-0",
                    viewMode === 'list' ? "w-16 h-16" : "w-full aspect-square"
                  )}>
-                     <SongImage src={album.cover} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                     <SongImage src={album.thumbnail || album.cover} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                  </div>
                  <div className="flex-1 min-w-0">
                     <p className={cn(
@@ -756,7 +799,7 @@ const Library = () => {
               <div className="flex items-center gap-4 mb-6 border-b border-white/5 pb-4">
                 <div className="w-16 h-16 rounded-xl overflow-hidden bg-zinc-900 border border-white/10 shrink-0">
                    <SongImage 
-                    src={selectedPlaylist ? (selectedPlaylist.songs?.[0]?.cover) : (selectedAlbum?.cover || selectedArtist?.cover)} 
+                    src={selectedPlaylist ? (selectedPlaylist.songs?.[0]?.thumbnail || selectedPlaylist.songs?.[0]?.cover) : (selectedAlbum?.thumbnail || selectedAlbum?.cover || selectedArtist?.thumbnail || selectedArtist?.cover)} 
                     alt="Entity cover" 
                     className="w-full h-full object-cover" 
                   />

@@ -2,10 +2,7 @@ import { apiFetch } from '../lib/api';
 
 const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
 
-/**
- * Service to fetch high-quality metadata and artwork from iTunes Search API
- * This bypasses CORS issues with Google Drive by searching for the song online.
- */
+
 export const fetchExternalMetadata = async (artist, title) => {
   if (!artist || !title || artist === "Unknown Artist") return null;
 
@@ -26,6 +23,7 @@ export const fetchExternalMetadata = async (artist, title) => {
         artist: result.artistName,
         album: result.collectionName,
         cover: result.artworkUrl100 ? result.artworkUrl100.replace("100x100bb", "600x600bb") : null,
+        thumbnail: result.artworkUrl100 ? result.artworkUrl100.replace("100x100bb", "300x300bb") : null,
         genre: result.primaryGenreName,
         year: result.releaseDate ? new Date(result.releaseDate).getFullYear() : null,
       };

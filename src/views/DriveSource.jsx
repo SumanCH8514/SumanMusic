@@ -36,11 +36,11 @@ const DriveSource = () => {
 
   return (
     <div className="flex flex-col gap-6 pb-48 w-full max-w-6xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-center gap-4">
-        <h1 className="text-3xl font-black text-text-primary">SumanMusic</h1>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-bg-surface/80 rounded-full border border-border-main/10 group-focus-within:border-primary/50 transition-colors">
-           <Search className="w-4 h-4 text-text-secondary" />
-           <input type="text" placeholder="Search Drive" className="bg-transparent border-none text-xs focus:ring-0 w-32 text-text-primary placeholder:text-text-secondary" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-2 sm:px-0">
+        <h1 className="text-2xl sm:text-3xl font-black text-text-primary">SumanMusic</h1>
+        <div className="flex items-center gap-2 px-4 py-2 bg-bg-surface/80 rounded-full border border-border-main/10 group-focus-within:border-primary/50 transition-colors w-full sm:w-auto">
+           <Search className="w-4 h-4 text-text-secondary shrink-0" />
+           <input type="text" placeholder="Search Drive" className="bg-transparent border-none text-xs focus:ring-0 flex-1 sm:w-32 text-text-primary placeholder:text-text-secondary" />
         </div>
       </div>
 
@@ -100,36 +100,39 @@ const DriveSource = () => {
 
         {/* Now Playing Widget (Desktop Center) */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-bg-surface/40 rounded-xl border border-border-main/5 p-8 flex gap-8 items-center bg-gradient-to-br from-bg-surface/20 to-transparent backdrop-blur-md">
-             <div className="w-48 h-48 rounded-lg shadow-2xl overflow-hidden flex-shrink-0 border border-border-main/10">
+          <div className="bg-bg-surface/40 rounded-2xl border border-border-main/5 p-6 sm:p-8 flex flex-col md:flex-row gap-6 md:gap-8 items-center bg-gradient-to-br from-bg-surface/20 to-transparent backdrop-blur-md">
+             <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-2xl shadow-2xl overflow-hidden flex-shrink-0 border border-border-main/10">
                 <SongImage src={currentSong?.cover || songs[0].cover} alt="Now playing" className="w-full h-full object-cover" />
              </div>
-             <div className="flex-1 flex flex-col gap-6">
-                <div>
-                   <h2 className="text-5xl font-black text-text-primary mb-2">{currentSong?.title || "Song Title"}</h2>
-                   <p className="text-text-secondary font-medium">{currentSong?.artist || "Unknown Artist"} {currentSong?.year ? `• ${currentSong.year}` : ""}</p>
-                   <p className="text-text-secondary/50 text-sm">{currentSong?.album || (currentSong ? "Single" : "Album Name")}</p>
+             <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left gap-6 w-full overflow-hidden">
+                <div className="w-full">
+                   <h2 className={cn(
+                     "font-black text-text-primary mb-2 line-clamp-2",
+                     (currentSong?.title?.length || 0) > 20 ? "text-2xl sm:text-3xl md:text-4xl" : "text-3xl sm:text-4xl md:text-5xl"
+                   )}>{currentSong?.title || "Song Title"}</h2>
+                   <p className="text-text-secondary font-medium truncate">{currentSong?.artist || "Unknown Artist"} {currentSong?.year ? `• ${currentSong.year}` : ""}</p>
+                   <p className="text-text-secondary/50 text-sm truncate">{currentSong?.album || (currentSong ? "Single" : "Album Name")}</p>
                 </div>
                 
-                <div className="flex items-center gap-4">
-                   <button className="bg-primary text-black font-extrabold px-10 py-3 rounded-full flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 w-full">
+                   <button className="bg-primary text-black font-extrabold px-8 sm:px-10 py-3 rounded-full flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20 flex-1 sm:flex-initial">
                       <Play className="w-5 h-5 fill-current" />
                       Play
                    </button>
-                   <button className="bg-bg-surface text-text-primary font-bold px-8 py-3 rounded-full border border-border-main/10 hover:bg-bg-surface/80 transition-colors flex items-center gap-2">
+                   <button className="bg-bg-surface text-text-primary font-bold px-6 sm:px-8 py-3 rounded-full border border-border-main/10 hover:bg-bg-surface/80 transition-colors flex items-center justify-center gap-2 flex-1 sm:flex-initial">
                         <Shuffle className="w-5 h-5" />
                         Next
                     </button>
                 </div>
 
-                 <div className="space-y-2 max-w-md">
+                 <div className="space-y-2 w-full max-w-md">
                     <div className="flex justify-between text-[10px] font-bold text-text-secondary">
                        <span>{formatTime(currentTime)}</span>
                        <span>{formatTime(duration)}</span>
                     </div>
-                    <div className="h-1 w-full bg-bg-base rounded-full relative overflow-hidden border border-border-main/5">
+                    <div className="h-1.5 w-full bg-bg-base/50 rounded-full relative overflow-hidden border border-border-main/5">
                        <div 
-                         className="absolute top-0 left-0 h-full bg-primary transition-all duration-300" 
+                         className="absolute top-0 left-0 h-full bg-primary transition-all duration-300 rounded-full" 
                          style={{ width: `${progress}%` }}
                        />
                     </div>

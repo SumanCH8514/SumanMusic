@@ -1,12 +1,15 @@
 import React, { memo } from 'react';
-import { Home, Search, Library, Heart, Cloud, User, Settings, Plus, X, Music2, Loader2 } from 'lucide-react';
+import { Home, Search, Library, Heart, Cloud, User, Settings, Plus, X, Music2, Loader2, Globe } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlaylists } from '../context/PlaylistContext';
+import { useSettings } from '../context/SettingsContext';
 import { cn } from '../lib/utils';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import SongImage from './SongImage';
 
+// eslint-disable-next-line no-unused-vars
 const NavItem = ({ icon: Icon, label, active, onClick, variant = 'desktop' }) => (
   <div
     onClick={onClick}
@@ -27,6 +30,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { user, isGuest } = useAuth();
   const { playlists, createPlaylist, loading: playlistsLoading } = usePlaylists();
+  const { canAccessOnline } = useSettings();
   const [isCreating, setIsCreating] = React.useState(false);
   const [newPlaylistName, setNewPlaylistName] = React.useState('');
 
@@ -38,10 +42,16 @@ const Sidebar = ({ isOpen, onClose }) => {
   const isArtists = currentPath === '/app/artists';
   const isLiked = currentPath === '/app/library' && new URLSearchParams(location.search).get('filter') === 'Liked';
 
-  const commonItems = [
-    { icon: Home, label: "Home", active: isHome, onClick: () => navigate('/app') },
-    { icon: Library, label: "Library", active: isLibrary, onClick: () => navigate('/app/library') },
-  ];
+  const isOnline = currentPath === '/app/online';
+
+  const commonItems = React.useMemo(() => {
+    const items = [
+      { icon: Home, label: "Home", active: isHome, onClick: () => navigate('/app') },
+      canAccessOnline && { icon: Globe, label: "Online Library", active: isOnline, onClick: () => navigate('/app/online') },
+      { icon: Library, label: "Library", active: isLibrary, onClick: () => navigate('/app/library') },
+    ].filter(Boolean);
+    return items;
+  }, [isHome, isOnline, isLibrary, canAccessOnline, navigate]);
 
   const desktopExtraItems = [
     { icon: Search, label: "Search", active: isSearch, onClick: () => navigate('/app/search') },
@@ -70,9 +80,15 @@ const Sidebar = ({ isOpen, onClose }) => {
       {/* Scrollable middle section */}
       <div className="flex-1 overflow-y-auto no-scrollbar py-2">
         <div className="flex flex-col gap-1 px-2">
-          <NavItem {...commonItems[0]} variant="mobile" onClick={() => { commonItems[0].onClick(); onClose(); }} />
-          <NavItem {...desktopExtraItems[0]} variant="mobile" onClick={() => { desktopExtraItems[0].onClick(); onClose(); }} />
-          <NavItem {...commonItems[1]} variant="mobile" onClick={() => { commonItems[1].onClick(); onClose(); }} />
+          {commonItems.slice(0, 1).map((item, idx) => (
+            <NavItem key={idx} {...item} variant="mobile" onClick={() => { item.onClick(); onClose(); }} />
+          ))}
+          {desktopExtraItems.slice(0, 1).map((item, idx) => (
+            <NavItem key={`extra-${idx}`} {...item} variant="mobile" onClick={() => { item.onClick(); onClose(); }} />
+          ))}
+          {commonItems.slice(1).map((item, idx) => (
+            <NavItem key={`common-rest-${idx}`} {...item} variant="mobile" onClick={() => { item.onClick(); onClose(); }} />
+          ))}
           
           <div className="h-[1px] bg-border-main/10 my-2 mx-4" />
           
@@ -196,12 +212,12 @@ const Sidebar = ({ isOpen, onClose }) => {
             className="h-16 w-auto object-contain"
           />
         </div>
-        <NavItem {...commonItems[0]} variant="desktop" />
-        <NavItem {...desktopExtraItems[0]} variant="desktop" />
-        <NavItem {...commonItems[1]} variant="desktop" />
-        <NavItem {...desktopExtraItems[1]} variant="desktop" />
-        <NavItem {...desktopExtraItems[2]} variant="desktop" />
-        <NavItem {...desktopExtraItems[3]} variant="desktop" />
+        {commonItems.map((item, idx) => (
+          <NavItem key={idx} {...item} variant="desktop" />
+        ))}
+        {desktopExtraItems.map((item, idx) => (
+          <NavItem key={`desktop-extra-${idx}`} {...item} variant="desktop" />
+        ))}
       </div>
 
       {user && !isGuest ? (

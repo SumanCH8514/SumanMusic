@@ -1,4 +1,4 @@
-import { GDRIVE_CONFIG } from '../config';
+import { ENV } from '../config/env';
 import { apiFetch } from '../lib/api';
 
 export const fetchPersonalSongsFromDrive = async (accessToken) => {
@@ -62,7 +62,9 @@ export const fetchPersonalSongsFromDrive = async (accessToken) => {
         driveUrl: file.webContentLink,
         duration: durationStr,
         size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-        isPersonal: true
+        thumbnail: file.thumbnailLink,
+        isPersonal: true,
+        createdTime: file.createdTime
       };
     });
   } catch (error) {
@@ -73,7 +75,7 @@ export const fetchPersonalSongsFromDrive = async (accessToken) => {
 };
 
 export const fetchSongsFromDrive = async (apiKey, accessToken = null) => {
-  const { FOLDER_ID } = GDRIVE_CONFIG;
+  const { FOLDER_ID } = ENV.GDRIVE;
 
   if (!apiKey || !FOLDER_ID) {
     console.warn("Google Drive API Key or Folder ID not configured properly.");
@@ -157,6 +159,7 @@ export const fetchSongsFromDrive = async (apiKey, accessToken = null) => {
             driveUrl: file.webContentLink,
             duration: durationStr,
             size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+            thumbnail: file.thumbnailLink,
             rawMetadata: file.videoMediaMetadata,
             createdTime: file.createdTime,
             isPersonal: false

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import { useNavigate, Outlet } from 'react-router-dom';
 import MusicPlayer from './MusicPlayer';
@@ -6,12 +6,11 @@ import { MoreHorizontal, Play, X, List, Plus, Music2, FolderPlus, Loader2, Sun, 
 import { useAuth } from '../context/AuthContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { useTheme } from '../context/ThemeContext';
-import { cn } from '../lib/utils';
 import SongImage from './SongImage';
 
-const Layout = ({ children }) => {
+const Layout = () => {
   const navigate = useNavigate();
-  const { user, isGuest } = useAuth();
+  const { user } = useAuth();
   const { playlists, createPlaylist, loading: playlistsLoading } = usePlaylists();
   const { theme, toggleTheme } = useTheme();
   const [showRightSidebar, setShowRightSidebar] = useState(false);
@@ -29,18 +28,21 @@ const Layout = ({ children }) => {
         <div className="flex-1 overflow-y-auto scroll-smooth pb-32 md:pb-24 no-scrollbar">
           {/* Mobile Header */}
           <header className="md:hidden sticky top-0 h-16 flex items-center justify-between px-4 z-40 bg-bg-base/90 backdrop-blur-md border-b border-border-main/5">
-             <div className="flex items-center gap-4">
+             <div className="flex items-center gap-2 sm:gap-4">
                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-text-primary hover:bg-border-main/5 rounded-full transition-colors">
                   <Menu className="w-6 h-6" />
                 </button>
-                <div className="flex items-center" onClick={() => navigate('/app')}>
-                  <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiQcq9JW-7OCvpIQ9XvoF52Fe1G4EUkPlGGRLL0rxShLbT_1taBp0XuT2hmJDU6S2NWZh_WmwFwEpnosKk1mWXaLNqpCRGSleFgbtQLPdMo518w2Vedsnh2dZUMYyZv8YdJrghW4v3SGp8dMdCthac7Zkvi4hizggT0ueTpExsy6OEUAuIs4-2x2uGP17Po/s0/SumanMusic-logo.png" alt="SumanMusic" className="h-10 w-auto object-contain" />
+                <div className="flex items-center cursor-pointer" onClick={() => navigate('/app')}>
+                  <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiQcq9JW-7OCvpIQ9XvoF52Fe1G4EUkPlGGRLL0rxShLbT_1taBp0XuT2hmJDU6S2NWZh_WmwFwEpnosKk1mWXaLNqpCRGSleFgbtQLPdMo518w2Vedsnh2dZUMYyZv8YdJrghW4v3SGp8dMdCthac7Zkvi4hizggT0ueTpExsy6OEUAuIs4-2x2uGP17Po/s0/SumanMusic-logo.png" alt="SumanMusic" className="h-[52px] w-auto object-contain origin-left hover:scale-105 transition-transform" />
                 </div>
              </div>
-             <div className="flex items-center gap-2">
+             <div className="flex items-center gap-1 sm:gap-2">
                 <button className="hidden sm:flex items-center px-4 py-1.5 rounded-full border border-border-main/20 text-sm font-bold hover:bg-border-main/5 transition-colors">Open app</button>
-                <button onClick={() => navigate('/app/search')} className="p-2 text-text-primary hover:bg-border-main/5 rounded-full transition-colors"><Search className="w-6 h-6" /></button>
-                <div className="w-8 h-8 rounded-full bg-bg-surface border border-border-main/10 flex items-center justify-center cursor-pointer overflow-hidden" onClick={() => navigate('/app/profile')}>
+                <button onClick={() => navigate('/app/search')} className="p-2 text-text-primary hover:bg-border-main/5 rounded-full transition-colors"><Search className="w-5 h-5 sm:w-6 sm:h-6" /></button>
+                <button onClick={toggleTheme} className="p-2 text-text-primary hover:bg-border-main/5 rounded-full transition-colors group">
+                  {theme === 'dark' ? <Sun className="w-5 h-5 sm:w-6 sm:h-6 text-text-secondary group-hover:text-primary transition-colors" /> : <Moon className="w-5 h-5 sm:w-6 sm:h-6 text-text-secondary group-hover:text-primary transition-colors" />}
+                </button>
+                <div className="w-8 h-8 rounded-full bg-bg-surface border border-border-main/10 flex items-center justify-center cursor-pointer overflow-hidden ml-1 sm:ml-2" onClick={() => navigate('/app/profile')}>
                     {user?.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-bold text-text-primary">{userInitial}</span>}
                 </div>
              </div>
@@ -51,17 +53,17 @@ const Layout = ({ children }) => {
              <div className="flex items-center">
                 {/* Desktop header left content if any */}
              </div>
-             <div className="flex items-center gap-4">
+             <div className="flex items-center gap-3 md:gap-4">
                 {!showRightSidebar && (
                   <button onClick={() => setShowRightSidebar(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-bg-surface border border-border-main/20 hover:bg-bg-surface/80 transition-colors text-text-secondary hover:text-text-primary">
                     <List className="w-4 h-4 text-primary" />
                     <span className="text-xs font-bold">Playlist</span>
                   </button>
                 )}
-                <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-bg-surface transition-colors text-text-secondary hover:text-text-primary border border-border-main/10">
-                  {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-indigo-400" />}
+                <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-bg-surface transition-colors text-text-secondary hover:text-text-primary border border-border-main/10 group">
+                  {theme === 'dark' ? <Sun className="w-5 h-5 group-hover:text-primary transition-colors" /> : <Moon className="w-5 h-5 group-hover:text-primary transition-colors" />}
                 </button>
-                <div className="w-8 h-8 rounded-full bg-bg-surface border border-border-main/10 flex items-center justify-center cursor-pointer group relative overflow-hidden" onClick={() => navigate('/app/profile')}>
+                <div className="w-8 h-8 rounded-full bg-bg-surface border border-border-main/10 flex items-center justify-center cursor-pointer group relative overflow-hidden ml-1" onClick={() => navigate('/app/profile')}>
                     {user?.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="profile" className="w-full h-full object-cover" /> : null}
                     <span className="text-xs font-bold text-text-secondary group-hover:text-text-primary transition-colors flex items-center justify-center w-full h-full" style={{ display: user?.photoURL ? 'none' : 'flex' }}>{userInitial}</span>
                 </div>
@@ -80,7 +82,7 @@ const Layout = ({ children }) => {
            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <List className="w-4 h-4 text-primary" />
-                <h3 className="font-bold text-zinc-200">Playlist</h3>
+                <h3 className="font-bold text-text-primary">Playlist</h3>
               </div>
               <div className="flex items-center gap-2">
                  <button onClick={() => setIsCreating(true)} className="p-1 rounded-full hover:bg-bg-surface/80 text-text-secondary hover:text-primary transition-colors">
@@ -94,13 +96,15 @@ const Layout = ({ children }) => {
            </div>
            <div className="space-y-4 overflow-y-auto no-scrollbar flex-1">
               {isCreating && (
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="p-4 rounded-2xl bg-bg-base border border-border-main/10 shadow-xl animate-in fade-in zoom-in-95 duration-200">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3">New Playlist</p>
                   <input 
                     autoFocus 
                     type="text" 
+                    id="new-playlist-input"
+                    name="new-playlist-input"
                     placeholder="Enter name..." 
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-text-primary placeholder-text-secondary/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all mb-4" 
+                    className="w-full bg-bg-surface border border-border-main/20 rounded-xl px-4 py-3 text-sm font-bold text-text-primary placeholder:text-text-secondary/40 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all mb-4" 
                     value={newPlaylistName} 
                     onChange={(e) => setNewPlaylistName(e.target.value)} 
                     onKeyDown={async (e) => { 
@@ -126,7 +130,7 @@ const Layout = ({ children }) => {
                       Create
                     </button>
                     <button 
-                      className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[11px] font-bold transition-all active:scale-95" 
+                      className="px-4 py-2.5 rounded-xl bg-bg-surface/80 hover:bg-bg-surface border border-border-main/10 text-text-primary text-[11px] font-bold transition-all active:scale-95" 
                       onClick={() => setIsCreating(false)}
                     >
                       Cancel
@@ -141,9 +145,9 @@ const Layout = ({ children }) => {
               ) : playlists.length > 0 ? (
                 <div className="flex flex-col gap-1">
                   {playlists.map(playlist => (
-                    <div key={playlist.id} className="group flex flex-col gap-2 p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-white/5" onClick={() => navigate(`/app/library?filter=Playlists&id=${playlist.id}`)}>
+                    <div key={playlist.id} className="group flex flex-col gap-2 p-3 rounded-xl hover:bg-bg-surface transition-all cursor-pointer border border-transparent hover:border-border-main/10" onClick={() => navigate(`/app/library?filter=Playlists&id=${playlist.id}`)}>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex items-center justify-center border border-white/5 flex-shrink-0 group-hover:border-primary/30 group-hover:bg-zinc-800/80 transition-all relative">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-bg-base flex items-center justify-center border border-border-main/10 flex-shrink-0 group-hover:border-primary/30 transition-all relative">
                           {playlist.songs && playlist.songs.length > 0 ? (
                             <SongImage src={playlist.songs[0].cover} alt={playlist.name} className="w-full h-full object-cover" />
                           ) : (
@@ -151,8 +155,8 @@ const Layout = ({ children }) => {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-white truncate group-hover:text-primary transition-colors">{playlist.name}</p>
-                          <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">{playlist.songs?.length || 0} songs</p>
+                          <p className="text-sm font-bold text-text-primary truncate group-hover:text-primary transition-colors">{playlist.name}</p>
+                          <p className="text-[10px] text-text-secondary font-medium uppercase tracking-wider">{playlist.songs?.length || 0} songs</p>
                         </div>
                       </div>
                     </div>

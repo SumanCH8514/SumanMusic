@@ -8,7 +8,10 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { cn } from '../lib/utils';
 import { useToast } from '../context/ToastContext';
+import { useSettings } from '../context/SettingsContext';
+import { Globe } from 'lucide-react';
 
+// eslint-disable-next-line no-unused-vars
 const AdminCard = ({ icon: Icon, title, description, count, color, isLoading }) => (
   <div className="relative overflow-hidden bg-black/40 backdrop-blur-xl border border-white/10 p-4 md:p-6 rounded-3xl hover:bg-white/5 transition-all duration-300 group">
     <div className={`absolute -right-10 -top-10 w-32 h-32 bg-${color}-500/20 rounded-full blur-3xl group-hover:bg-${color}-500/30 transition-colors`}></div>
@@ -49,11 +52,18 @@ const AdminPanel = () => {
     autoSwitchEnabled,
     updateAutoSwitchEnabled,
     isPersonalDriveEnabled,
-    updatePersonalDriveEnabled,
-    isLoading: loadingGDrive 
+    updatePersonalDriveEnabled
   } = useGDrive();
   const [localKeys, setLocalKeys] = useState(['', '', '', '']);
   const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const { 
+    isOnlineLibraryEnabled, 
+    updateOnlineLibraryEnabled, 
+    isVoiceSearchEnabled,
+    updateVoiceSearchEnabled,
+    onlineLibraryAccess, 
+    updateOnlineLibraryAccess 
+  } = useSettings();
 
   useEffect(() => {
     if (keys) setLocalKeys(keys);
@@ -94,7 +104,7 @@ const AdminPanel = () => {
       setSyncMessage('Library synced successfully!');
       showToast('Library synced successfully!');
       setTimeout(() => setSyncMessage(''), 3000);
-    } catch (error) {
+    } catch {
       setSyncMessage('Sync failed. Check API key.');
       showToast('Sync failed. Check API key.');
       setTimeout(() => setSyncMessage(''), 3000);
@@ -215,6 +225,90 @@ const AdminPanel = () => {
                 </div>
               </button>
             </div>
+            
+            {/* Feature Management */}
+            <div className="space-y-4 md:space-y-6">
+              <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
+                <Globe className="w-5 h-5 md:w-6 md:h-6 text-purple-400" />
+                Feature Management
+              </h2>
+              <div className="bg-white/5 backdrop-blur-md rounded-[1.5rem] md:rounded-3xl p-4 md:p-6 border border-white/10 space-y-4">
+                
+                {/* Online Library Toggle */}
+                <div className="flex items-center justify-between p-4 bg-purple-500/5 border border-purple-500/20 rounded-2xl">
+                  <div className="flex-1 pr-4">
+                    <p className="text-sm font-bold text-white leading-tight">Online Library (YouTube)</p>
+                    <p className="text-[10px] text-zinc-400 mt-1">Enable or disable global access to YouTube music streaming</p>
+                  </div>
+                  <button
+                    onClick={() => updateOnlineLibraryEnabled(!isOnlineLibraryEnabled)}
+                    className={cn(
+                      "relative w-11 h-6 rounded-full transition-all duration-300 focus:outline-none flex-shrink-0",
+                      isOnlineLibraryEnabled ? "bg-purple-500 shadow-lg shadow-purple-500/20" : "bg-zinc-700"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 left-1 w-4 h-4 rounded-full transition-all duration-300",
+                      isOnlineLibraryEnabled ? "translate-x-5 bg-white" : "translate-x-0 bg-zinc-400"
+                    )} />
+                  </button>
+                </div>
+
+                {/* Voice Search Toggle */}
+                <div className="flex items-center justify-between p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl">
+                  <div className="flex-1 pr-4">
+                    <p className="text-sm font-bold text-white leading-tight">Voice Search (AI Feature)</p>
+                    <p className="text-[10px] text-zinc-400 mt-1">Enable or disable hands-free search via microphone</p>
+                  </div>
+                  <button
+                    onClick={() => updateVoiceSearchEnabled(!isVoiceSearchEnabled)}
+                    className={cn(
+                      "relative w-11 h-6 rounded-full transition-all duration-300 focus:outline-none flex-shrink-0",
+                      isVoiceSearchEnabled ? "bg-blue-500 shadow-lg shadow-blue-500/20" : "bg-zinc-700"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 left-1 w-4 h-4 rounded-full transition-all duration-300",
+                      isVoiceSearchEnabled ? "translate-x-5 bg-white" : "translate-x-0 bg-zinc-400"
+                    )} />
+                  </button>
+                </div>
+
+                {/* Visibility Level */}
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest pl-1">Visibility Level</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => updateOnlineLibraryAccess('all')}
+                      className={cn(
+                        "py-3 rounded-xl text-xs font-bold border transition-all",
+                        onlineLibraryAccess === 'all' 
+                          ? "bg-white/10 border-white/20 text-white" 
+                          : "bg-transparent border-white/5 text-zinc-500 hover:border-white/10"
+                      )}
+                    >
+                      All Users
+                    </button>
+                    <button
+                      onClick={() => updateOnlineLibraryAccess('logged_in')}
+                      className={cn(
+                        "py-3 rounded-xl text-xs font-bold border transition-all",
+                        onlineLibraryAccess === 'logged_in' 
+                          ? "bg-white/10 border-white/20 text-white" 
+                          : "bg-transparent border-white/5 text-zinc-500 hover:border-white/10"
+                      )}
+                    >
+                      Logged-in Only
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 italic pl-1">
+                    {onlineLibraryAccess === 'logged_in' 
+                      ? "Only registered users can see the Online Library link." 
+                      : "Feature is visible to guests and registered users alike."}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
             {/* Google Drive API Management */}
@@ -307,7 +401,7 @@ const AdminPanel = () => {
                       setSyncMessage('API keys updated successfully!');
                       showToast('API keys updated successfully!');
                       setTimeout(() => setSyncMessage(''), 3000);
-                    } catch (e) {
+                    } catch {
                       setSyncMessage('Failed to save API keys.');
                       showToast('Failed to save API keys.');
                     } finally {

@@ -5,6 +5,7 @@ import { usePlayer } from '../context/usePlayer';
 import { cn } from '../lib/utils';
 import PlayingVisualizer from '../components/PlayingVisualizer';
 import SongImage from '../components/SongImage';
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
 const getGreeting = () => {
@@ -29,17 +30,16 @@ const Home = () => {
     );
   }
 
-  // Split collaborations to get individual artists for variety
-  const allArtists = songs.reduce((acc, song) => {
-    const rawArtist = song.artist || 'Unknown Artist';
-    const splitArr = rawArtist.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
-    splitArr.forEach(a => acc.add(a));
-    return acc;
-  }, new Set());
 
-  const albumArtists = Array.from(allArtists).slice(0, 8);
+  // Group by album (fallback to "artist" if no album). Show one card per unique album.
+  const albumMap = new Map();
+  for (const song of songs) {
+    const albumKey = (song.album || song.artist || 'Unknown').trim();
+    if (!albumMap.has(albumKey)) {
+      albumMap.set(albumKey, song);
+    }
+  }
+  const albumEntries = Array.from(albumMap.entries()).slice(0, 12);
 
   return (
     <div className="flex flex-col gap-8 pb-48">
@@ -72,6 +72,8 @@ const Home = () => {
         </div>
         <input
           type="text"
+          id="home-search-input"
+          name="home-search-input"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -84,38 +86,44 @@ const Home = () => {
         />
       </div>
 
-      {/* Featured Albums Horizontal Scroll */}
+      {/* Albums by Singer – Horizontal Scroll */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-text-primary">Your Drive Library</h2>
           <span
-            onClick={() => navigate('/app/library')}
+            onClick={() => navigate('/app/library?filter=Albums')}
             className="text-xs font-bold text-text-secondary uppercase tracking-wider cursor-pointer hover:text-text-primary"
           >
             Show all
           </span>
         </div>
         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-          {albumArtists.map((artist, i) => {
-            const firstSong = songs.find(s => s.artist?.includes(artist));
-            if (!firstSong) return null;
+          {albumEntries.map(([, song], i) => {
+            const artist = song.artist || 'Unknown Artist';
+            const albumName = song.album || artist;
+            const navTarget = song.album
+              ? `/app/library?filter=Albums&album=${encodeURIComponent(song.album)}`
+              : `/app/library?filter=Artists&artist=${encodeURIComponent(artist.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)[0].trim())}`;
 
             return (
               <div
                 key={i}
                 className="flex-shrink-0 w-36 group cursor-pointer"
-                onClick={() => playSong(firstSong)}
+                onClick={() => navigate(navTarget)}
               >
                 <div className="aspect-square rounded-md overflow-hidden bg-bg-surface mb-2 relative shadow-lg border border-border-main/5">
-                  <SongImage src={firstSong.cover} alt={artist} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <SongImage src={song.thumbnail || song.cover} alt={albumName} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-xl translate-y-2 group-hover:translate-y-0 transition-transform">
+                    <div
+                      className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-xl translate-y-2 group-hover:translate-y-0 transition-transform"
+                      onClick={(e) => { e.stopPropagation(); playSong(song); }}
+                    >
                       <Play className="w-5 h-5 fill-current text-black" />
                     </div>
                   </div>
                 </div>
-                <p className="text-xs font-bold text-text-primary truncate">{artist}</p>
-                <p className="text-[10px] text-text-secondary truncate">From your Drive</p>
+                <p className="text-xs font-bold text-text-primary truncate">{albumName}</p>
+                <p className="text-[10px] text-text-secondary truncate">{artist}</p>
               </div>
             );
           })}
@@ -125,11 +133,19 @@ const Home = () => {
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-text-primary">Recently from Drive</h2>
-          <div
-            className="p-1.5 rounded-lg hover:bg-bg-surface transition-colors cursor-pointer text-text-secondary hover:text-text-primary border border-border-main/5"
-            onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-          >
-            {viewMode === 'list' ? <LayoutGrid className="w-5 h-5" /> : <List className="w-5 h-5" />}
+          <div className="flex items-center gap-3">
+            <span
+              onClick={() => navigate('/app/library?filter=Recent')}
+              className="text-xs font-bold text-text-secondary uppercase tracking-wider cursor-pointer hover:text-text-primary"
+            >
+              Show all
+            </span>
+            <div
+              className="p-1.5 rounded-lg hover:bg-bg-surface transition-colors cursor-pointer text-text-secondary hover:text-text-primary border border-border-main/5"
+              onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+            >
+              {viewMode === 'list' ? <LayoutGrid className="w-5 h-5" /> : <List className="w-5 h-5" />}
+            </div>
           </div>
         </div>
 
@@ -175,7 +191,7 @@ const Home = () => {
                 onClick={() => playSong(song)}
               >
                 <div className="w-full aspect-square rounded-xl overflow-hidden bg-bg-surface shadow-lg relative shrink-0 border border-border-main/5">
-                  <SongImage src={song.cover} alt={song.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                   {currentSong?.id === song.id && isPlaying && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]">
                       <PlayingVisualizer className="h-8" />

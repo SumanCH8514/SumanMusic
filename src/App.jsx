@@ -15,11 +15,15 @@ import AdminRoute from './components/AdminRoute';
 import MusicPlayer from './components/MusicPlayer';
 import NotFound from './views/NotFound';
 import RootErrorBoundary from './views/RootErrorBoundary';
+import { SettingsProvider } from './context/SettingsContext';
+import { ToastProvider } from './context/ToastContext';
+import { GDriveProvider } from './context/GDriveContext';
 
-// Lazy load views for bundle optimization
+
 const Home = lazy(() => import('./views/Home'));
 const Search = lazy(() => import('./views/Search'));
 const Library = lazy(() => import('./views/Library'));
+const OnlineLibrary = lazy(() => import('./views/OnlineLibrary'));
 const DriveSource = lazy(() => import('./views/DriveSource'));
 const LandingPage = lazy(() => import('./views/LandingPage'));
 const Profile = lazy(() => import('./views/Profile'));
@@ -36,8 +40,37 @@ const PageLoader = () => (
   </div>
 );
 
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+
 const RootLayout = () => {
-  return <Outlet />;
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = location.pathname;
+    let title = "SumanMusic | Premium Music Streaming";
+    
+    if (path === "/") title = "SumanMusic | Premium Music Streaming from Google Drive";
+    else if (path === "/app") title = "Home | SumanMusic";
+    else if (path.startsWith("/app/search")) title = "Search | SumanMusic";
+    else if (path.startsWith("/app/library")) title = "Library | SumanMusic";
+    else if (path.startsWith("/app/online")) title = "Online Library | SumanMusic";
+    else if (path.startsWith("/app/artists")) title = "Artists | SumanMusic";
+    else if (path.startsWith("/app/profile")) title = "Profile | SumanMusic";
+    else if (path === "/about-us") title = "About Us | SumanMusic";
+    else if (path === "/contact-us") title = "Contact Us | SumanMusic";
+    else if (path === "/privacy-policy") title = "Privacy Policy | SumanMusic";
+    else if (path === "/terms-of-service") title = "Terms of Service | SumanMusic";
+
+    document.title = title;
+  }, [location]);
+
+  return (
+    <>
+      <div id="youtube-player-container" className="hidden pointer-events-none invisible absolute -z-50" />
+      <Outlet />
+    </>
+  );
 };
 
 const router = createBrowserRouter([
@@ -92,6 +125,14 @@ const router = createBrowserRouter([
             element: (
               <Suspense fallback={<PageLoader />}>
                 <Library />
+              </Suspense>
+            ),
+          },
+          {
+            path: "online",
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <OnlineLibrary />
               </Suspense>
             ),
           },
@@ -171,15 +212,15 @@ const router = createBrowserRouter([
   },
 ]);
 
-import { ToastProvider } from './context/ToastContext';
-import { GDriveProvider } from './context/GDriveContext';
 
 function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
-          <RouterProvider router={router} />
+          <SettingsProvider>
+            <RouterProvider router={router} />
+          </SettingsProvider>
         </AuthProvider>
       </ToastProvider>
     </ThemeProvider>

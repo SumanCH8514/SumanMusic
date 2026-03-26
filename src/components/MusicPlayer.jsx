@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import {
@@ -66,29 +67,38 @@ const DynamicBackground = memo(({ cover }) => (
   </>
 ));
 
-const UpNextPanel = memo(({ queue, activeSong, playSong }) => (
+const UpNextPanel = memo(({ queue, activeSong, playSong, activeItemRef }) => (
   <div className="hidden md:flex flex-col w-[320px] h-[62vh] glass-premium rounded-[3rem] p-8 border border-border-main/5 relative overflow-hidden group">
     <div className="absolute inset-0 bg-gradient-to-br from-text-primary/5 to-transparent pointer-events-none" />
     <h3 className="text-text-secondary/40 text-[10px] font-black uppercase tracking-[0.4em] mb-10 relative z-10">Up Next</h3>
     <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth overscroll-contain mask-fade-v space-y-7 relative z-10 pr-2 pb-20">
-      {queue?.slice(queue.indexOf(activeSong) + 1).map((song, i) => (
+      {queue?.map((song, i) => (
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: i * 0.05 }}
           key={song.id}
-          className="flex items-center gap-5 group/item cursor-pointer"
+          ref={activeSong?.id === song.id ? activeItemRef : null}
+          className={cn(
+            "flex items-center gap-5 group/item cursor-pointer",
+            activeSong?.id === song.id && "bg-primary/5 p-2 -m-2 rounded-2xl border border-primary/20 shadow-[0_0_15px_rgba(var(--primary-rgb),0.05)]"
+          )}
           onClick={() => playSong(song)}
         >
-          <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 shadow-2xl group-hover/item:scale-110 transition-transform duration-500 bg-bg-surface flex items-center justify-center">
+          <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 shadow-2xl group-hover/item:scale-110 transition-transform duration-500 bg-bg-surface flex items-center justify-center relative">
             <SongImage
-              src={song.cover}
+              src={song.thumbnail || song.cover}
               alt={song.title}
               className="w-full h-full object-cover"
             />
+            {activeSong?.id === song.id && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                 <PlayingVisualizer className="h-3 gap-[1px]" />
+              </div>
+            )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-bold text-text-primary truncate group-hover/item:text-primary transition-colors">{song.title}</p>
+            <p className={cn("text-[15px] font-bold truncate transition-colors", activeSong?.id === song.id ? "text-primary" : "text-text-primary group-hover/item:text-primary")}>{song.title}</p>
             <p className="text-[11px] text-text-secondary/30 font-bold truncate uppercase tracking-widest mt-1">{song.artist}</p>
           </div>
         </motion.div>
@@ -499,7 +509,6 @@ const MusicPlayer = () => {
     toggleLike,
     lyrics,
     isLyricsLoading,
-    setIsLyricsRequested,
     isFullScreen,
     setIsFullScreen
   } = usePlayer();
@@ -555,6 +564,8 @@ const MusicPlayer = () => {
 
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const lyricsContainerRef = useRef(null);
+  const queueContainerRef = useRef(null);
+  const activeQueueItemRef = useRef(null);
   const autoScrollTimeoutRef = useRef(null);
 
   // Calculate active lyric index once per render
@@ -599,10 +610,24 @@ const MusicPlayer = () => {
     }, 3000);
   }, [isAutoScrollEnabled]);
 
+  const activeSong = currentSong;
+
+  // Auto-scroll queue to active song
+  useEffect(() => {
+    if (activeTab === 'upnext' && activeQueueItemRef.current) {
+      const isMobile = window.innerWidth < 768;
+      // On desktop expanded or mobile tab content
+      if (!isMobile || !isTabCollapsed) {
+        activeQueueItemRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }
+    }
+  }, [currentSong?.id, activeTab, isTabCollapsed, isFullScreen]);
+
 
   if (location.pathname === '/' || location.pathname.includes('admin-panel') || location.pathname === '/app/profile') return null;
-
-  const activeSong = currentSong;
 
   return (
     <>
@@ -745,9 +770,18 @@ const MusicPlayer = () => {
                       "w-5 h-5 transition-all cursor-pointer mr-2",
                       likedSongs.includes(activeSong.id) ? "text-primary fill-current scale-110" : "text-text-secondary hover:text-text-primary"
                     )}
-                    onClick={() => toggleLike(activeSong)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleLike(activeSong);
+                    }}
                   />
-                  <MoreHorizontal className="w-5 h-5 text-text-secondary hover:text-text-primary cursor-pointer" onClick={() => setOptionsSong(activeSong)} />
+                  <MoreHorizontal 
+                    className="w-5 h-5 text-text-secondary hover:text-text-primary cursor-pointer" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOptionsSong(optionsSong?.id === activeSong.id ? null : activeSong);
+                    }} 
+                  />
                 </div>
 
                 <button className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors active:scale-95" onClick={() => setRepeatMode(repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none')}>
@@ -809,16 +843,30 @@ const MusicPlayer = () => {
                   '--color-border-main': 'rgba(255, 255, 255, 0.1)'
                 }}
               >
+                {/* Mobile Close Button (Highest Z-Index) */}
+                <AnimatePresence>
+                  {isTabCollapsed && !optionsSong && !isPlaylistPickerOpen && (
+                    <motion.button 
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      onClick={() => setIsFullScreen(false)} 
+                      className="fixed top-4 left-4 p-2 text-text-primary hover:bg-bg-surface/50 rounded-full transition-all active:scale-90 z-[100] md:hidden"
+                      aria-label="Close player"
+                    >
+                      <ChevronDown className="w-9 h-9 drop-shadow-lg" />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+
                 {/* Main Viewport */}
                 <div className="h-[100dvh] md:h-screen flex flex-col pt-4 md:pt-8 px-0 md:px-8 pb-0 relative z-10 overflow-hidden">
                   <DynamicBackground cover={activeSong.cover} />
 
                   <div className="relative z-20 flex flex-col h-full w-full min-h-0">
-                    <div className="flex items-center justify-between mb-2 md:mb-4 flex-shrink-0 px-4 md:px-0">
-                      <button onClick={() => setIsFullScreen(false)} className="p-2 -ml-2 text-text-primary hover:bg-bg-surface/50 rounded-full transition-colors">
-                        <ChevronDown className="w-8 h-8" />
-                      </button>
-                      <div className="text-center space-y-1">
+                    <div className="flex items-center justify-between mb-2 md:mb-4 flex-shrink-0 px-4 md:px-0 relative z-[10]">
+                      <div className="w-10 md:hidden" /> {/* Spacer for the absolute close button */}
+                      <div className="text-center space-y-1 mx-auto">
                         <p className="text-[9px] font-black tracking-[0.4em] text-text-secondary/30 uppercase">Playing from</p>
                         <p className="text-xs font-black text-text-primary tracking-[0.1em] uppercase">My Personal Library</p>
                       </div>
@@ -842,13 +890,19 @@ const MusicPlayer = () => {
                             <ListMusic className="w-6 h-6" />
                           )}
                         </button>
-                        <MoreHorizontal className="w-6 h-6 text-text-primary cursor-pointer hover:bg-bg-surface/50 rounded-full p-1" onClick={() => setOptionsSong(activeSong)} />
+                        <MoreHorizontal 
+                          className="w-6 h-6 text-text-primary cursor-pointer hover:bg-bg-surface/50 rounded-full p-1" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOptionsSong(optionsSong?.id === activeSong.id ? null : activeSong);
+                          }} 
+                        />
                       </div>
                     </div>
 
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 lg:gap-24 items-center justify-items-center min-h-0 w-full max-w-7xl mx-auto px-0 md:px-8 pb-4">
                       <div className="hidden md:flex justify-self-end">
-                        <UpNextPanel queue={queue} activeSong={activeSong} playSong={playSong} />
+                        <UpNextPanel queue={queue} activeSong={activeSong} playSong={playSong} activeItemRef={activeQueueItemRef} />
                       </div>
 
                       <PlayerHero activeSong={activeSong} likedSongs={likedSongs} toggleLike={toggleLike} />
@@ -949,7 +1003,7 @@ const MusicPlayer = () => {
                         onClick={() => setIsTabCollapsed(true)}
                       >
                         <div className="w-10 h-10 rounded overflow-hidden shadow-md shrink-0 bg-[#2a2a2a] flex items-center justify-center">
-                          <SongImage src={activeSong.cover} alt={activeSong.title} className="w-full h-full object-cover" />
+                          <SongImage src={activeSong.thumbnail || activeSong.cover} alt={activeSong.title} className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1 min-w-0 flex flex-col justify-center pt-0.5">
                           <p className="text-white font-bold text-[15px] leading-none mb-1 truncate">{activeSong.title}</p>
@@ -1143,6 +1197,7 @@ const MusicPlayer = () => {
                               {queue?.map((song) => (
                                 <div
                                   key={song.id}
+                                  ref={currentSong?.id === song.id ? activeQueueItemRef : null}
                                   className={cn(
                                     "flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer",
                                     currentSong?.id === song.id ? "bg-white/5" : "active:bg-white/5"
@@ -1150,7 +1205,7 @@ const MusicPlayer = () => {
                                   onClick={() => playSong(song)}
                                 >
                                   <div className="w-[44px] h-[44px] rounded-lg overflow-hidden flex-shrink-0 relative shadow-sm">
-                                    <SongImage src={song.cover} alt={song.title} className="w-full h-full object-cover" />
+                                    <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover" />
                                     {currentSong?.id === song.id && isPlaying && (
                                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                         <PlayingVisualizer className="h-2.5 gap-[1px]" />
@@ -1188,7 +1243,7 @@ const MusicPlayer = () => {
                                     onClick={() => playSong(song)}
                                   >
                                     <div className="w-[44px] h-[44px] rounded-lg overflow-hidden flex-shrink-0 relative shadow-sm">
-                                      <SongImage src={song.cover} alt={song.title} className="w-full h-full object-cover" />
+                                      <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover" />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <p className="text-[15px] font-medium truncate leading-tight flex items-center gap-2 text-text-primary">
@@ -1249,10 +1304,23 @@ const MusicPlayer = () => {
                 </div>
 
                 <div className="flex w-full h-full p-8 pb-32 gap-12 overflow-hidden mx-auto max-w-[1600px] relative z-10">
-                  {/* Left side: Artwork Area */}
-                  <div className="flex-1 flex flex-col items-center justify-center p-8 relative group">
-                    <div className="relative w-full max-w-[550px] aspect-square rounded-[12px] shadow-[0_30px_80px_rgba(0,0,0,0.8)] overflow-hidden flex items-center justify-center group-hover:scale-[1.02] group-hover:rotate-1 transition-all duration-700 ease-out">
-                      <SongImage src={activeSong.cover} alt={activeSong.title} className="w-full h-full object-cover" />
+                  {/* Close button for desktop */}
+                  {!optionsSong && !isPlaylistPickerOpen && (
+                    <button 
+                      onClick={() => setIsFullScreen(false)} 
+                      className="absolute top-4 right-8 p-3 hover:bg-white/5 rounded-full transition-all text-text-primary z-20 group active:scale-90"
+                      title="Minimize"
+                    >
+                      <ChevronDown className="w-8 h-8 group-hover:scale-110 transition-transform" />
+                    </button>
+                  )}
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 relative group max-h-full">
+                    <div className="relative w-full max-w-[550px] rounded-[12px] shadow-[0_30px_80px_rgba(0,0,0,0.8)] overflow-hidden flex items-center justify-center group-hover:scale-[1.02] group-hover:rotate-1 transition-all duration-700 ease-out">
+                      <SongImage 
+                        src={activeSong.cover} 
+                        alt={activeSong.title} 
+                        className="w-full h-full object-contain max-h-[70vh]" 
+                      />
                     </div>
                   </div>
 
@@ -1281,9 +1349,14 @@ const MusicPlayer = () => {
                           >
                             <div className="px-4 border-t border-transparent pt-4">
                               {queue?.map((song) => (
-                                <div key={song.id} className={cn("flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer group/q", currentSong?.id === song.id ? "bg-primary/20" : "hover:bg-bg-surface/80")} onClick={() => playSong(song)}>
+                                <div 
+                                  key={song.id} 
+                                  ref={currentSong?.id === song.id ? activeQueueItemRef : null}
+                                  className={cn("flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer group/q", currentSong?.id === song.id ? "bg-primary/20" : "hover:bg-bg-surface/80")} 
+                                  onClick={() => playSong(song)}
+                                >
                                   <div className="w-[48px] h-[48px] rounded-lg overflow-hidden flex-shrink-0 relative shadow-md">
-                                    <SongImage src={song.cover} alt={song.title} className="w-full h-full object-cover" />
+                                    <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover" />
                                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/q:opacity-100 transition-opacity">
                                       {currentSong?.id === song.id && isPlaying ? <PlayingVisualizer className="h-3 gap-[1px]" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
                                     </div>
@@ -1409,14 +1482,14 @@ const MusicPlayer = () => {
         <div className="fixed inset-0 md:left-64 z-[70] flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOptionsSong(null)} />
           <div className={cn(
-            "relative bg-bg-surface rounded-t-3xl pt-2 px-4 shadow-2xl border-t border-border-main/10 animate-in slide-in-from-bottom-full duration-300 pointer-events-auto pb-safe transition-colors",
-            isAppRoute && "pb-5"
+            "relative bg-bg-surface rounded-t-3xl pt-2 px-4 shadow-2xl border-t border-border-main/10 animate-in slide-in-from-bottom-full duration-300 pointer-events-auto pb-safe transition-colors mb-0 md:mb-20",
+            isAppRoute && "pb-0 md:pb-5"
           )}>
             <div className="w-12 h-1 bg-border-main/20 rounded-full mx-auto mb-4" />
 
             <div className="flex items-center gap-4 mb-6 border-b border-border-main/10 pb-4">
               <div className="w-14 h-14 rounded overflow-hidden flex-shrink-0">
-                <SongImage src={optionsSong.cover} alt={optionsSong.title} className="w-full h-full object-cover" />
+                <SongImage src={optionsSong.thumbnail || optionsSong.cover} alt={optionsSong.title} className="w-full h-full object-cover" />
               </div>
               <div className="min-w-0 pr-4 flex-1">
                 <p className="text-base font-bold text-text-primary truncate">{optionsSong.title}</p>
@@ -1433,12 +1506,12 @@ const MusicPlayer = () => {
                 { id: 'addToQueue', icon: ListMusic, label: 'Add to queue' },
                 { id: 'saveLibrary', icon: PlusCircle, label: 'Save to library' },
                 { id: 'like', icon: Heart, label: 'Add to liked songs' },
+                { id: 'share', icon: Share2, label: 'Share' },
                 { id: 'download', icon: Download, label: 'Download' },
                 { id: 'savePlaylist', icon: FolderPlus, label: 'Save to playlist' },
                 { id: 'album', icon: Disc, label: 'Go to album' },
                 { id: 'artist', icon: User, label: 'Go to artist' },
-                { id: 'credits', icon: Info, label: 'View song credits' },
-                { id: 'share', icon: Share2, label: 'Share' }
+                { id: 'credits', icon: Info, label: 'View song credits' }
               ].map((opt, i) => (
                 <button
                   key={i}
@@ -1555,7 +1628,7 @@ const MusicPlayer = () => {
                   >
                     <div className="w-12 h-12 rounded-lg overflow-hidden bg-bg-base flex items-center justify-center border border-border-main/5 relative">
                       {playlist.songs && playlist.songs.length > 0 ? (
-                        <SongImage src={playlist.songs[0].cover} alt={playlist.name} className="w-full h-full object-cover" />
+                        <SongImage src={playlist.songs[0].thumbnail || playlist.songs[0].cover} alt={playlist.name} className="w-full h-full object-cover" />
                       ) : (
                         <ListMusic className="w-6 h-6 text-primary" />
                       )}
@@ -1572,6 +1645,8 @@ const MusicPlayer = () => {
                     <input
                       autoFocus
                       type="text"
+                      id="save-playlist-input"
+                      name="save-playlist-input"
                       placeholder="Enter playlist name..."
                       className="w-full bg-bg-base border border-border-main/10 rounded-xl py-4 px-5 text-text-primary placeholder-text-secondary/50 focus:ring-2 focus:ring-primary/50 text-lg font-bold"
                       value={newPlaylistName}

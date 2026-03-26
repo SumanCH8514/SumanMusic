@@ -25,20 +25,19 @@ SumanMusic is a high-performance, aesthetically-driven music application that br
 
 ## 🚀 Key Features & Capabilities
 
-### 📂 Hybrid Cloud Library
-- **Dual-Source Streaming**: Seamlessly switch between a pre-configured "Inbuilt" music collection and your "Personal" Google Drive.
-- **Recursive Directory Scan**: Automatically discovers audio files deep within your Drive folders.
-- **Dynamic Metadata Enrichment**: Automatically fetches high-quality album art and artist biographies for your local files via external APIs.
+### 🌐 Online Library (YouTube)
+- **YouTube-Powered Streaming**: A dedicated "Online Library" view with trending music and genre exploration.
+- **Smart Quota Management**: Automatic API key rotation and failover to maximize availability despite YouTube's daily limit.
+- **Unified Engine**: Seamlessly switch between local Google Drive tracks and YouTube songs with a single player.
 
-### 🎧 Pro Player Experience
-- **Media Session API**: Full integration with Windows/macOS/Linux media controls. See artwork and control playback from your lock screen or media keys.
-- **Synchronized Lyrics**: Support for `.lrc` files with real-time scrolling and manual playback seeking.
-- **Smart Queue & Shuffle**: Advanced queue management with persistent shuffle states and repeat modes.
-- **Audio Visualizers**: Native-like micro-animations and visual feedback during playback.
+### 🔍 Search & Voice
+- **Voice Search (Mic)**: One-tap hands-free searching using the Web Speech API.
+- **Expanded Genres**: Interactive genre grid with 16+ categories and smooth entrance animations.
+- **Real-Time Results**: Instant search across both your local library and global music trends.
 
-### 🌍 Universal Connectivity
-- **Platform-Independent Share Links**: Generate short links for any track, album, or playlist that work across any environment (localhost or production).
-- **Responsive Architecture**: A custom-built mobile mini-player and a glassmorphic desktop sidebar ensure a premium feel on any device.
+### 🛠️ Administrative Control
+- **Admin Panel**: Dedicated dashboard for monitoring session data and managing global feature flags.
+- **Feature Management**: Admins can toggle the Online Library or restrict it to logged-in users only.
 
 ### 🔐 Security & Persistence
 - **Firebase Core**: Real-time Firestore sync for your liked songs, playlists, and user preferences.

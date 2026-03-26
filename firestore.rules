@@ -24,8 +24,8 @@ service cloud.firestore {
 
     // Settings: Global configuration managed by admins
     match /settings/{docId} {
-      // Allow everyone to read the GDrive API settings so music plays for guests
-      allow read: if docId == 'gdrive_api' || (request.auth != null);
+      // Allow everyone to read the GDrive and Global settings so guests see feature flags
+      allow read: if docId == 'gdrive_api' || docId == 'global' || (request.auth != null);
       allow write: if isAdmin();
     }
   }

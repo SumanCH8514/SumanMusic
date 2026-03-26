@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchSongsFromDrive, fetchPersonalSongsFromDrive } from '../services/googleDrive';
 import { fetchExternalMetadata } from '../services/metadata';
@@ -9,7 +10,10 @@ import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { AlertTriangle, HardDrive, RefreshCw, X } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
+import { useMediaSession } from '../hooks/useMediaSession';
+import { usePlayerSync } from '../hooks/usePlayerSync';
+import { usePlayerMetadata } from '../hooks/usePlayerMetadata';
 
 export const PlayerContext = createContext();
 
@@ -23,8 +27,6 @@ export const PlayerProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [optionsSong, setOptionsSong] = useState(null);
   const [librarySource, setLibrarySource] = useState(() => localStorage.getItem('suman_music_library_source') || 'inbuilt');
-  const [lyrics, setLyrics] = useState([]);
-  const [isLyricsLoading, setIsLyricsLoading] = useState(false);
   const [isLyricsRequested, setIsLyricsRequested] = useState(false);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [likedSongs, setLikedSongs] = useState(() => {
@@ -41,8 +43,15 @@ export const PlayerProvider = ({ children }) => {
   
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isFullScreen = !!searchParams.get('v');
+  const [isFullScreen, setIsFullScreenInternal] = useState(!!searchParams.get('v'));
+
+
+  useEffect(() => {
+    setIsFullScreenInternal(!!searchParams.get('v'));
+  }, [searchParams]);
+
   const setIsFullScreen = useCallback((expanded) => {
+    setIsFullScreenInternal(expanded);
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
       if (expanded && currentSong?.id) {
@@ -67,10 +76,64 @@ export const PlayerProvider = ({ children }) => {
     toggle: togglePlay,
     seek,
     isBuffering,
-    audioInstance
+    initYouTube,
+    getAudioInstance
   } = useAudio();
 
   const { activeKey, isLoading: loadingGDrive } = useGDrive();
+  const wakeLock = useRef(null);
+
+  const requestWakeLock = useCallback(async () => {
+    if ('wakeLock' in navigator && !wakeLock.current) {
+      try {
+        wakeLock.current = await navigator.wakeLock.request('screen');
+        wakeLock.current.addEventListener('release', () => {
+          wakeLock.current = null;
+        });
+      } catch (err) {
+        console.warn('Wake Lock request failed:', err);
+      }
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLock.current) {
+      wakeLock.current.release();
+      wakeLock.current = null;
+    }
+  }, []);
+
+
+
+  const { lyrics, isLyricsLoading, enrichMetadata } = usePlayerMetadata({
+    currentSong, setCurrentSong, songs, setSongs, setQueue, isFullScreen, showToast
+  });
+
+  usePlayerSync({
+    user, isGuest, likedSongs, setLikedSongs, currentSong, queue, currentTime, isPlaying, setSongs,
+    isShuffle, repeatMode, librarySource, pause
+  });
+
+
+  useEffect(() => {
+    if (isPlaying) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isPlaying) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, [isPlaying, requestWakeLock, releaseWakeLock]);
 
   const loadSongs = useCallback(async () => {
     if (loadingGDrive) return;
@@ -111,68 +174,17 @@ export const PlayerProvider = ({ children }) => {
         fetchedSongs = ibSongs;
       }
 
+      fetchedSongs.sort((a, b) => {
+        const timeA = new Date(a.createdTime || 0).getTime();
+        const timeB = new Date(b.createdTime || 0).getTime();
+        return timeB - timeA;
+      });
+
       if (fetchedSongs.length > 0) {
         setSongs(fetchedSongs);
-        setQueue(fetchedSongs); // Default queue to all songs
+        setQueue(fetchedSongs);
         
-        fetchedSongs.forEach(async (song) => {
-          try {
-            const metadata = await fetchExternalMetadata(song.artist, song.title);
-            if (metadata) {
-              setSongs(prevSongs => {
-                const songIndex = prevSongs.findIndex(s => s.id === song.id);
-                if (songIndex === -1) return prevSongs;
-
-                const updatedSongs = [...prevSongs];
-                updatedSongs[songIndex] = {
-                  ...updatedSongs[songIndex],
-                  title: metadata.title || updatedSongs[songIndex].title,
-                  artist: metadata.artist || updatedSongs[songIndex].artist,
-                  album: metadata.album,
-                  year: metadata.year,
-                  genre: metadata.genre,
-                  cover: metadata.cover || updatedSongs[songIndex].cover
-                };
-                
-                return updatedSongs;
-              });
-
-              setQueue(prevQueue => {
-                const songIndex = prevQueue.findIndex(s => s.id === song.id);
-                if (songIndex === -1) return prevQueue;
-
-                const updatedQueue = [...prevQueue];
-                updatedQueue[songIndex] = {
-                  ...updatedQueue[songIndex],
-                  title: metadata.title || updatedQueue[songIndex].title,
-                  artist: metadata.artist || updatedQueue[songIndex].artist,
-                  album: metadata.album,
-                  year: metadata.year,
-                  genre: metadata.genre,
-                  cover: metadata.cover || updatedQueue[songIndex].cover
-                };
-                return updatedQueue;
-              });
-
-              setCurrentSong(prevCurrent => {
-                if (prevCurrent?.id === song.id) {
-                  return {
-                    ...prevCurrent,
-                    title: metadata.title || prevCurrent.title,
-                    artist: metadata.artist || prevCurrent.artist,
-                    album: metadata.album,
-                    year: metadata.year,
-                    genre: metadata.genre,
-                    cover: metadata.cover || prevCurrent.cover
-                  };
-                }
-                return prevCurrent;
-              });
-            }
-          } catch (enrichErr) {
-            console.error("Failed to enrich metadata for song:", song.title, enrichErr);
-          }
-        });
+        fetchedSongs.forEach(song => enrichMetadata(song));
       } else {
         setError("No songs found in the specified Drive folder or API not configured.");
       }
@@ -182,6 +194,7 @@ export const PlayerProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setSource, activeKey, loadingGDrive, librarySource, personalDriveToken, disconnectPersonalDrive, showToast]);
 
   const [hasRestored, setHasRestored] = useState(false);
@@ -196,17 +209,18 @@ export const PlayerProvider = ({ children }) => {
         const restoredSong = songs.find(s => s.id === lastSongId);
         if (restoredSong) {
           setCurrentSong(restoredSong);
-          setSource(restoredSong.url);
+          setSource(restoredSong.url, restoredSong.isYouTube ? restoredSong.videoId : null);
           
           const savedTime = localStorage.getItem('suman_music_last_time');
           if (savedTime && !urlSongId) { // Only restore time if it's not a direct shared link
             const time = parseFloat(savedTime);
             if (time > 0) {
               const onLoaded = () => {
-                audioInstance.currentTime = time;
-                audioInstance.removeEventListener('loadedmetadata', onLoaded);
+                const audio = getAudioInstance();
+                audio.currentTime = time;
+                audio.removeEventListener('loadedmetadata', onLoaded);
               };
-              audioInstance.addEventListener('loadedmetadata', onLoaded);
+              getAudioInstance().addEventListener('loadedmetadata', onLoaded);
             }
           }
           
@@ -225,7 +239,7 @@ export const PlayerProvider = ({ children }) => {
       }
       setHasRestored(true);
     }
-  }, [songs, hasRestored, isLoading, searchParams, setSource, audioInstance]);
+  }, [songs, hasRestored, isLoading, searchParams, setSource, getAudioInstance]);
 
   useEffect(() => {
     if (!activeKey) return;
@@ -233,14 +247,12 @@ export const PlayerProvider = ({ children }) => {
     const updateUrl = (song) => {
       let newUrl = song.url;
       if (song.isPersonal && personalDriveToken) {
-        // Only use access token for personal songs
         if (newUrl.includes('&key=')) {
           newUrl = newUrl.replace(/&key=[^&]+/, `&access_token=${personalDriveToken}`);
         } else if (newUrl.includes('&access_token=')) {
           newUrl = newUrl.replace(/&access_token=[^&]+/, `&access_token=${personalDriveToken}`);
         }
       } else {
-        // Use API key for inbuilt/public songs
         if (newUrl.includes('&access_token=')) {
           newUrl = newUrl.replace(/&access_token=[^&]+/, `&key=${activeKey}`);
         } else if (newUrl.includes('&key=')) {
@@ -255,10 +267,12 @@ export const PlayerProvider = ({ children }) => {
     if (currentSong) {
       const updatedCurrent = updateUrl(currentSong);
       setCurrentSong(updatedCurrent);
-      if (audioInstance.src && audioInstance.src.includes('googleapis.com')) {
-        setSource(updatedCurrent.url);
+      const audio = getAudioInstance();
+      if (audio && audio.src && audio.src.includes('googleapis.com')) {
+        setSource(updatedCurrent.url, updatedCurrent.isYouTube ? updatedCurrent.videoId : null);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, personalDriveToken]);
 
   useEffect(() => {
@@ -280,14 +294,15 @@ export const PlayerProvider = ({ children }) => {
   const playSong = useCallback((song) => {
     setCurrentSong(song);
     setQueue(songs); 
-    setSource(song.url);
+    setSource(song.url, song.isYouTube ? song.videoId : null);
     play();
   }, [songs, setSource, play]);
 
   const playQueue = useCallback((newQueue, startSong) => {
+    const song = startSong || newQueue[0];
     setQueue(newQueue);
-    setCurrentSong(startSong || newQueue[0]);
-    setSource((startSong || newQueue[0]).url);
+    setCurrentSong(song);
+    setSource(song.url, song.isYouTube ? song.videoId : null);
     play();
   }, [setSource, play]);
 
@@ -309,7 +324,7 @@ export const PlayerProvider = ({ children }) => {
     
     const nextSong = queue[nextIndex];
     setCurrentSong(nextSong);
-    setSource(nextSong.url);
+    setSource(nextSong.url, nextSong.isYouTube ? nextSong.videoId : null);
     play();
   }, [currentSong, queue, isShuffle, repeatMode, setSource, play, pause]);
 
@@ -321,242 +336,30 @@ export const PlayerProvider = ({ children }) => {
     
     const prevSong = queue[prevIndex];
     setCurrentSong(prevSong);
-    setSource(prevSong.url);
+    setSource(prevSong.url, prevSong.isYouTube ? prevSong.videoId : null);
     play();
   }, [currentSong, queue, setSource, play]);
 
   useEffect(() => {
+    const audio = getAudioInstance();
     const handleEnded = () => {
       if (repeatMode === 'one') {
-        audioInstance.currentTime = 0;
-        audioInstance.play();
+        audio.currentTime = 0;
+        audio.play().catch(e => console.warn("Failed to replay:", e));
       } else {
         playNext();
       }
     };
 
-    audioInstance.addEventListener('ended', handleEnded);
-    return () => audioInstance.removeEventListener('ended', handleEnded);
-  }, [repeatMode, playNext, audioInstance]);
-  
-  useEffect(() => {
-    localStorage.setItem('suman_music_liked', JSON.stringify(likedSongs));
-  }, [likedSongs]);
-
-  useEffect(() => {
-    localStorage.setItem('suman_music_shuffle', isShuffle.toString());
-  }, [isShuffle]);
-
-  useEffect(() => {
-    localStorage.setItem('suman_music_library_source', librarySource);
-  }, [librarySource]);
-
-  useEffect(() => {
-    localStorage.setItem('suman_music_repeat', repeatMode);
-  }, [repeatMode]);
-
-
-  useEffect(() => {
-    if (isFullScreen && currentSong?.id) {
-      setSearchParams(prev => {
-        const next = new URLSearchParams(prev);
-        if (next.get('v') !== currentSong.id) {
-          next.set('v', currentSong.id);
-          return next;
-        }
-        return prev; // No change
-      }, { replace: true });
-    }
-  }, [currentSong?.id, isFullScreen, setSearchParams]);
-
-  useEffect(() => {
-    if (currentSong?.id) {
-      localStorage.setItem('suman_music_last_song_id', currentSong.id);
-    }
-  }, [currentSong]);
-
-  useEffect(() => {
-    if (queue.length > 0) {
-      const ids = queue.map(s => s.id).filter(id => id && !id.startsWith('placeholder'));
-      if (ids.length > 0) {
-        localStorage.setItem('suman_music_last_queue_ids', JSON.stringify(ids));
-      }
-    }
-  }, [queue]);
-
-  useEffect(() => {
-    if (currentTime > 0 && isPlaying) {
-      localStorage.setItem('suman_music_last_time', currentTime.toString());
-    }
-  }, [currentTime, isPlaying]);
-  
-  useEffect(() => {
-    if (!currentSong || currentSong.isPlaceholder || !isFullScreen) {
-      setLyrics([]);
-      return;
-    }
-
-    const loadLyrics = async () => {
-      setIsLyricsLoading(true);
-      try {
-        const data = await fetchLyrics(currentSong.artist, currentSong.title, currentSong.album);
-        if (data && data.syncedLyrics) {
-          setLyrics(parseLrc(data.syncedLyrics));
-        } else if (data && data.plainLyrics) {
-          // Fallback to plain lyrics as a single item with time 0 if not synced
-          setLyrics([{ time: 0, text: data.plainLyrics }]);
-        } else {
-          setLyrics([]);
-        }
-      } catch (err) {
-        console.error("Failed to load lyrics:", err);
-        setLyrics([]);
-      } finally {
-        setIsLyricsLoading(false);
-      }
-    };
-
-    loadLyrics();
-  }, [currentSong?.id, isFullScreen]);
-
-  const prevUserUid = useRef(user?.uid);
-
-  // Handle logout or account switch: pause music and clear state
-  useEffect(() => {
-    if (prevUserUid.current !== user?.uid) {
-      if (prevUserUid.current) {
-        pause();
-        setCurrentSong(null);
-        setQueue([]);
-        setSongs([]);
-        setLyrics([]);
-        localStorage.removeItem('suman_music_last_song_id');
-        localStorage.removeItem('suman_music_last_queue_ids');
-        localStorage.removeItem('suman_music_last_time');
-      }
-      prevUserUid.current = user?.uid;
-    }
-  }, [user?.uid, pause]);
-
-  useEffect(() => {
-    if ('mediaSession' in navigator && currentSong) {
-      navigator.mediaSession.metadata = new window.MediaMetadata({
-        title: currentSong.title,
-        artist: currentSong.artist,
-        album: currentSong.album || '',
-        artwork: [
-          { src: currentSong.cover || '/logo512.png', sizes: '96x96', type: 'image/png' },
-          { src: currentSong.cover || '/logo512.png', sizes: '128x128', type: 'image/png' },
-          { src: currentSong.cover || '/logo512.png', sizes: '192x192', type: 'image/png' },
-          { src: currentSong.cover || '/logo512.png', sizes: '256x256', type: 'image/png' },
-          { src: currentSong.cover || '/logo512.png', sizes: '384x384', type: 'image/png' },
-          { src: currentSong.cover || '/logo512.png', sizes: '512x512', type: 'image/png' },
-        ],
-      });
-    }
-  }, [currentSong]);
-
-  useEffect(() => {
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-    }
-  }, [isPlaying]);
-
-  useEffect(() => {
-    if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && duration > 0) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: duration,
-          playbackRate: 1,
-          position: currentTime
-        });
-      } catch (e) {
-        console.warn("Failed to set MediaSession position state", e);
-      }
-    }
-  }, [currentTime, duration]);
-
-  useEffect(() => {
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', play);
-      navigator.mediaSession.setActionHandler('pause', pause);
-      navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
-      navigator.mediaSession.setActionHandler('nexttrack', playNext);
-      navigator.mediaSession.setActionHandler('seekbackward', () => seek(Math.max(0, currentTime - 10)));
-      navigator.mediaSession.setActionHandler('seekforward', () => seek(Math.min(duration, currentTime + 10)));
-      
-      try {
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-          if (details.seekTime !== undefined) {
-            seek(details.seekTime);
-          }
-        });
-      } catch (error) {
-        console.warn('The "seekto" media session action is not supported.');
-      }
-    }
-    
+    audio.addEventListener('ended', handleEnded);
+    window.addEventListener('youtube-song-ended', handleEnded);
     return () => {
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('play', null);
-        navigator.mediaSession.setActionHandler('pause', null);
-        navigator.mediaSession.setActionHandler('previoustrack', null);
-        navigator.mediaSession.setActionHandler('nexttrack', null);
-        navigator.mediaSession.setActionHandler('seekbackward', null);
-        navigator.mediaSession.setActionHandler('seekforward', null);
-        navigator.mediaSession.setActionHandler('seekto', null);
-      }
+      audio.removeEventListener('ended', handleEnded);
+      window.removeEventListener('youtube-song-ended', handleEnded);
     };
-  }, [play, pause, playPrevious, playNext, seek, currentTime, duration]);
+  }, [repeatMode, playNext, getAudioInstance]);
+  
 
-  useEffect(() => {
-    if (!user || isGuest) return;
-
-    const userRef = doc(db, 'users', user.uid);
-    
-    // Initial sync / migration
-    const syncInitial = async () => {
-      try {
-        const docSnap = await getDoc(userRef);
-        let cloudLikedIds = [];
-        if (docSnap.exists() && docSnap.data().likedSongs) {
-          // Migration: handles both string IDs and old object format
-          cloudLikedIds = docSnap.data().likedSongs.map(item => 
-            typeof item === 'string' ? item : item.id
-          );
-        }
-
-        // Migration: Merge local IDs into cloud
-        const localIds = likedSongs.map(item => typeof item === 'string' ? item : item.id);
-        const merged = Array.from(new Set([...cloudLikedIds, ...localIds]));
-        
-        if (merged.length > cloudLikedIds.length) {
-          await setDoc(userRef, { likedSongs: merged }, { merge: true });
-        }
-        setLikedSongs(merged);
-      } catch (err) {
-        console.error("Error syncing favorites with cloud:", err);
-      }
-    };
-
-    syncInitial();
-
-    // Real-time listener from other devices
-    const unsubscribe = onSnapshot(userRef, (doc) => {
-      if (doc.exists() && doc.data().likedSongs) {
-        const cloudIds = doc.data().likedSongs.map(item => 
-          typeof item === 'string' ? item : item.id
-        );
-        // Only update if different to avoid loops
-        setLikedSongs(prev => {
-          if (JSON.stringify(prev) === JSON.stringify(cloudIds)) return prev;
-          return cloudIds;
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [user?.uid, isGuest]);
 
   const toggleLike = useCallback(async (songOrId) => {
     const songId = typeof songOrId === 'string' ? songOrId : songOrId.id;
@@ -587,10 +390,16 @@ export const PlayerProvider = ({ children }) => {
       setShowExpiryModal(false);
       showToast("Personal Google Drive Reconnected!", "success");
       setTimeout(() => loadSongs(), 500);
-    } catch (err) {
+    } catch {
       showToast("Failed to reconnect Google Drive.", "error");
     }
   };
+
+
+  useMediaSession({ 
+    currentSong, isPlaying, currentTime, duration, 
+    play, pause, playNext, playPrevious, seek 
+  });
 
   const ExpiryModal = () => (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-hidden pointer-events-auto">
@@ -673,6 +482,7 @@ export const PlayerProvider = ({ children }) => {
       setIsLyricsRequested,
       isFullScreen,
       setIsFullScreen,
+      initYouTube,
       refreshSongs: loadSongs
     }}>
       {showExpiryModal && <ExpiryModal />}

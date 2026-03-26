@@ -1,36 +1,67 @@
-/**
- * Lyrics Service
- * Fetches synced and plain lyrics from LRCLIB API
- */
+import { apiFetch } from '../lib/api';
+
 
 const LRCLIB_BASE_URL = 'https://lrclib.net/api';
 const LYRICS_OVH_BASE_URL = 'https://api.lyrics.ovh/v1';
 
-/**
- * Extracts the primary artist name from a potentially multi-artist string
- * @param {string} artist - Artist string (e.g., "Artist A, Artist B & Artist C")
- * @returns {string} - Primary artist name
- */
-const getPrimaryArtist = (artist) => {
-  if (!artist) return '';
-  return artist.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)[0].trim();
+
+
+const cleanArtist = (artist) => {
+  if (!artist || artist === "Unknown Artist") return "";
+  return artist
+    .split(/\s*,\s*|\s*&\s*|\s+and\s+|\s+x\s+/i)[0]
+    .replace(/\s*(?:feat|ft)\.?.*$/i, "")
+    .trim();
 };
 
-/**
- * Fetches lyrics from LRCLIB search endpoint (Fuzzy Match)
- * @param {string} artist 
- * @param {string} title 
- * @returns {Promise<{syncedLyrics: string, plainLyrics: string} | null>}
- */
+
+const getLyricsScore = (synced, plain) => {
+  const text = synced || plain || '';
+  if (!text) return -1000;
+
+  let score = 0;
+  if (synced) score += 500;
+  if (/[\u0900-\u097F]/.test(text)) {
+    score -= 200;
+  } else {
+    // Bonus for common English words if it's Latin script
+    const commonEnglishWords = /\b(the|and|you|is|it|in|to|of|that|this|with|for|was|are|on|be|at)\b/gi;
+    const matches = text.match(commonEnglishWords);
+    if (matches) score += matches.length * 10;
+  }
+
+  return score;
+};
+
+
+const cleanTitle = (title) => {
+  if (!title) return '';
+  return title
+    .replace(/\s*\(?(?:official|music|video|audio|lyrics|hd|40k|explicit|edit|radio|club|remix|version|mix|karaoke|instrumental)\)?/gi, '')
+    .replace(/\s*\[(?:official|music|video|audio|lyrics|hd|4k|explicit|edit|radio|club|remix|version|mix|karaoke|instrumental)\]/gi, '')
+    .replace(/\s*\(?\s*(?:feat|ft)\.?\s+[^)]+\)?/gi, '')
+    .replace(/\s*\[\s*(?:feat|ft)\.?\s+[^\]]+\]/gi, '')
+    .replace(/\s*[-(].*?(?:remix|version|edit|mix|track|ost).*?[)]?/gi, '')
+    .replace(/\s*\(.*?\)/g, '')
+    .trim();
+};
+
+
 const fetchLyricsLrcLibSearch = async (artist, title) => {
   try {
-    const query = encodeURIComponent(`${getPrimaryArtist(artist)} ${title}`);
+    const query = encodeURIComponent(`${cleanArtist(artist)} ${cleanTitle(title)}`);
     const response = await apiFetch(`${LRCLIB_BASE_URL}/search?q=${query}`);
     if (!response.ok) return null;
     const data = await response.json();
     
     if (data && data.length > 0) {
-      const result = data.find(r => r.syncedLyrics || r.plainLyrics) || data[0];
+      const sortedResults = [...data].sort((a, b) => {
+        const scoreA = getLyricsScore(a.syncedLyrics, a.plainLyrics);
+        const scoreB = getLyricsScore(b.syncedLyrics, b.plainLyrics);
+        return scoreB - scoreA;
+      });
+
+      const result = sortedResults[0];
       return {
         syncedLyrics: result.syncedLyrics || '',
         plainLyrics: result.plainLyrics || ''
@@ -43,15 +74,10 @@ const fetchLyricsLrcLibSearch = async (artist, title) => {
   }
 };
 
-/**
- * Fetches lyrics from secondary source (Lyrics.ovh)
- * @param {string} artist 
- * @param {string} title 
- * @returns {Promise<{syncedLyrics: string, plainLyrics: string} | null>}
- */
+
 const fetchLyricsOvh = async (artist, title) => {
   try {
-    const primaryArtist = getPrimaryArtist(artist);
+    const primaryArtist = cleanArtist(artist);
     const response = await apiFetch(`${LYRICS_OVH_BASE_URL}/${encodeURIComponent(primaryArtist)}/${encodeURIComponent(title)}`);
     if (!response.ok) return null;
     const data = await response.json();
@@ -66,71 +92,75 @@ const fetchLyricsOvh = async (artist, title) => {
   }
 };
 
-/**
- */
-import { apiFetch } from '../lib/api';
-
 export const fetchLyrics = async (artist, title, album = '', duration = 0) => {
-  const maxRetries = 1;
-  let attempt = 0;
+  const metaVariants = [
+    { a: artist, t: title, alb: album },
+    { a: artist, t: title, alb: '' },
+    { a: cleanArtist(artist), t: cleanTitle(title), alb: album },
+    { a: cleanArtist(artist), t: cleanTitle(title), alb: '' }
+  ];
 
-  while (attempt <= maxRetries) {
+
+  for (const variant of metaVariants) {
     try {
       const params = new URLSearchParams({
-        track_name: title,
-        artist_name: artist,
+        track_name: variant.t,
+        artist_name: variant.a,
       });
 
-      if (album) params.append('album_name', album);
+      if (variant.alb) params.append('album_name', variant.alb);
       if (duration) params.append('duration', Math.round(duration));
 
       const response = await apiFetch(`${LRCLIB_BASE_URL}/get?${params.toString()}`);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          const searchResult = await fetchLyricsLrcLibSearch(artist, title);
-          if (searchResult) return searchResult;
-          return await fetchLyricsOvh(artist, title);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.syncedLyrics || data.plainLyrics) {
+          return {
+            syncedLyrics: data.syncedLyrics || '',
+            plainLyrics: data.plainLyrics || ''
+          };
         }
-        throw new Error(`Lyrics API error: ${response.status}`);
       }
-
-      const data = await response.json();
-      
-      if (!data.syncedLyrics && !data.plainLyrics) {
-        const searchResult = await fetchLyricsLrcLibSearch(artist, title);
-        if (searchResult) return searchResult;
-        return await fetchLyricsOvh(artist, title);
-      }
-
-      return {
-        syncedLyrics: data.syncedLyrics || '',
-        plainLyrics: data.plainLyrics || ''
-      };
-    } catch (error) {
-      attempt++;
-      if (attempt > maxRetries) {
-        const searchResult = await fetchLyricsLrcLibSearch(artist, title);
-        if (searchResult) return searchResult;
-        return await fetchLyricsOvh(artist, title);
-      }
-      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (e) {
+      console.warn("LRCLIB /get failed for variant:", variant, e);
     }
   }
-  return null;
+
+
+  const searchResult = await fetchLyricsLrcLibSearch(artist, title);
+  if (searchResult) return searchResult;
+
+
+  try {
+    const titleOnlyQuery = encodeURIComponent(cleanTitle(title));
+    const response = await apiFetch(`${LRCLIB_BASE_URL}/search?q=${titleOnlyQuery}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const sortedResults = [...data].sort((a, b) => {
+          const scoreA = getLyricsScore(a.syncedLyrics, a.plainLyrics);
+          const scoreB = getLyricsScore(b.syncedLyrics, b.plainLyrics);
+          return scoreB - scoreA;
+        });
+
+        const result = sortedResults[0];
+        return { syncedLyrics: result.syncedLyrics || '', plainLyrics: result.plainLyrics || '' };
+      }
+    }
+  } catch (e) {
+    console.warn("LRCLIB Title-only search failed:", e);
+  }
+
+
+  return await fetchLyricsOvh(artist, title);
 };
 
-/**
- * Parses LRC format into an array of objects
- * @param {string} lrcString - The LRC format string
- * @returns {Array<{time: number, text: string}>}
- */
+
 export const parseLrc = (lrcString) => {
   if (!lrcString) return [];
 
   const lines = lrcString.split('\n');
   const result = [];
-  // Supports formats: [mm:ss.xx], [mm:ss:xx], [mm:ss]
   const timeRegex = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
 
   lines.forEach(line => {
@@ -138,7 +168,6 @@ export const parseLrc = (lrcString) => {
     if (!text) return;
 
     let match;
-    // Reset regex index for multiple matches on the same line
     timeRegex.lastIndex = 0;
     
     while ((match = timeRegex.exec(line)) !== null) {

@@ -1,16 +1,17 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithPopup, 
+import {
+  onAuthStateChanged,
+  signInWithPopup,
   signOut,
   updateProfile,
   GoogleAuthProvider
 } from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
+import {
+  doc,
+  setDoc,
   getDoc,
-  serverTimestamp 
+  serverTimestamp
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 
@@ -62,7 +63,7 @@ export const AuthProvider = ({ children }) => {
     try {
       googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
       const result = await signInWithPopup(auth, googleProvider);
-      
+
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential && credential.accessToken) {
         setPersonalDriveToken(credential.accessToken);
@@ -86,11 +87,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      
+
       try {
         const userRef = doc(db, 'users', user.uid);
         const userDoc = await getDoc(userRef);
-        
+
         const userData = {
           uid: user.uid,
           displayName: user.displayName,
@@ -106,11 +107,10 @@ export const AuthProvider = ({ children }) => {
         }
 
         await setDoc(userRef, userData, { merge: true });
-        console.log("Firestore Sync Success");
       } catch (fsError) {
         console.warn("Firestore Sync Failed (Check Security Rules):", fsError.message);
       }
-      
+
       return result;
     } catch (error) {
       console.error("Auth/Login Error:", error);
@@ -145,12 +145,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const continueAsGuest = () => {
-    const guestUser = { 
-      displayName: 'Guest User', 
-      photoURL: '/guest_avatar.png', 
-      email: 'guest@sumanmusic.local', 
+    const guestUser = {
+      displayName: 'Guest User',
+      photoURL: '/guest_avatar.png',
+      email: 'no-reply@SumanOnline.com',
       role: 'user',
-      uid: 'guest-' + Math.random().toString(36).substr(2, 9) 
+      uid: 'guest-' + Math.random().toString(36).substr(2, 9)
     };
     localStorage.setItem('suman_music_guest', JSON.stringify(guestUser));
     setUser(guestUser);

@@ -1,6 +1,7 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 
@@ -54,7 +55,7 @@ export const GDriveProvider = ({ children }) => {
     return () => unsubscribe();
   }, [user]);
 
-  const updateActiveIndex = async (index) => {
+  const updateActiveIndex = useCallback(async (index) => {
     setActiveIndex(index);
     if (user?.role === 'admin') {
       try {
@@ -64,9 +65,9 @@ export const GDriveProvider = ({ children }) => {
         console.error("Failed to sync GDrive active index to Firestore:", error);
       }
     }
-  };
+  }, [user]);
 
-  const updateKeys = async (newKeys) => {
+  const updateKeys = useCallback(async (newKeys) => {
     setKeys(newKeys);
     if (user?.role === 'admin') {
       try {
@@ -76,9 +77,9 @@ export const GDriveProvider = ({ children }) => {
         console.error("Failed to sync GDrive keys to Firestore:", error);
       }
     }
-  };
+  }, [user]);
 
-  const updateAutoSwitchEnabled = async (enabled) => {
+  const updateAutoSwitchEnabled = useCallback(async (enabled) => {
     setAutoSwitchEnabled(enabled);
     if (user?.role === 'admin') {
       try {
@@ -88,9 +89,9 @@ export const GDriveProvider = ({ children }) => {
         console.error("Failed to sync auto-switch setting to Firestore:", error);
       }
     }
-  };
+  }, [user]);
 
-  const updatePersonalDriveEnabled = async (enabled) => {
+  const updatePersonalDriveEnabled = useCallback(async (enabled) => {
     setIsPersonalDriveEnabled(enabled);
     if (user?.role === 'admin') {
       try {
@@ -100,10 +101,9 @@ export const GDriveProvider = ({ children }) => {
         console.error("Failed to sync personal drive setting to Firestore:", error);
       }
     }
-  };
+  }, [user]);
 
   const rotationCountRef = useRef(0);
-  const lastFailoverRef = useRef(0);
 
   const switchKey = useCallback(async () => {
     const validKeys = keys.filter(k => k && k.trim() !== "");
@@ -123,7 +123,7 @@ export const GDriveProvider = ({ children }) => {
 
     await updateActiveIndex(nextIndex);
     showToast(`API Key switched automatically (Key #${nextIndex + 1})`, "error");
-  }, [activeIndex, keys, showToast, user]);
+  }, [activeIndex, keys, showToast, updateActiveIndex]);
 
   useEffect(() => {
     const handleFailover = () => {

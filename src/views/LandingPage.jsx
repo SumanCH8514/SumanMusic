@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+// eslint-disable-next-line no-unused-vars
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { Music, Play, Globe, Shield, Zap, ArrowRight, Github, Twitter, Instagram, Cloud, Sparkles, X, Chrome, Loader2, AlertCircle, SkipBack, SkipForward, Pause, Volume2, Shuffle, Repeat, Heart, MoreHorizontal, ChevronDown } from 'lucide-react';
 
@@ -59,7 +60,7 @@ const LandingPage = () => {
       await new Promise(resolve => setTimeout(resolve, 800));
       continueAsGuest();
       navigate('/app');
-    } catch (error) {
+    } catch {
       setAuthError("Failed to enter guest mode.");
     } finally {
       setIsGuestLoading(false);
@@ -254,8 +255,8 @@ const LandingPage = () => {
             variants={itemVariants}
             className="text-5xl md:text-6xl lg:text-[9rem] font-black tracking-[calc(-0.04em)] mb-10 leading-[0.95] md:leading-[0.85] uppercase"
           >
-            A New Way<br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-b from-primary via-primary/80 to-blue-600">To Listen.</span>
+            SumanMusic:<br />
+            <span className="bg-clip-text text-transparent bg-gradient-to-b from-primary via-primary/80 to-blue-600">A New Way To Listen.</span>
           </motion.h1>
 
           <motion.p
@@ -327,7 +328,7 @@ const LandingPage = () => {
                     <h4 className="text-[10px] font-bold tracking-widest text-text-secondary uppercase mb-4">"UP NEXT"</h4>
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-3 p-2 rounded-xl bg-white/10 border border-white/10 shadow-lg cursor-pointer shrink-0">
-                        <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop" className="w-10 h-10 rounded-lg object-cover shadow-md" alt="" />
+                        <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=200&fit=crop" className="w-10 h-10 rounded-lg object-cover shadow-md" alt="Starboy Album Cover" />
                         <div className="overflow-hidden">
                           <p className="text-white text-xs font-bold truncate">Starboy</p>
                           <p className="text-text-secondary text-[10px] truncate">The Weeknd</p>
@@ -340,7 +341,7 @@ const LandingPage = () => {
                         { title: "Call Out My Name", artist: "The Weeknd", img: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&h=100&fit=crop" }
                       ].map((song, i) => (
                         <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors opacity-70 hover:opacity-100 shrink-0">
-                          <img src={song.img} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                          <img src={song.img} className="w-10 h-10 rounded-lg object-cover" alt={`${song.title} by ${song.artist}`} />
                           <div className="overflow-hidden">
                             <p className="text-white text-xs font-bold truncate">{song.title}</p>
                             <p className="text-text-secondary text-[10px] truncate">{song.artist}</p>

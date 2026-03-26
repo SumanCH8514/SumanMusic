@@ -1,42 +1,63 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <base href="/" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <title>SumanMusic | Stream Your Music Library from Google Drive</title>
-    <meta name="description" content="SumanMusic is a premium music streaming platform that connects directly to your Google Drive. Access your personal music library anywhere with a high-end audio experience." />
-    <meta name="keywords" content="SumanMusic, music streaming, Google Drive music player, cloud music player, Suman Music, stream from drive" />
-    <meta name="author" content="SumanMusic" />
-    
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://songs.sumanonline.com/" />
-    <meta property="og:title" content="SumanMusic | Stream Your Music Library from Google Drive" />
-    <meta property="og:description" content="Connect your Google Drive and start streaming your personal music library with SumanMusic's premium interface." />
-    <meta property="og:image" content="https://songs.sumanonline.com/favicon.png" />
 
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="https://songs.sumanonline.com/" />
-    <meta property="twitter:title" content="SumanMusic | Stream Your Music Library from Google Drive" />
-    <meta property="twitter:description" content="Connect your Google Drive and start streaming your personal music library with SumanMusic's premium interface." />
-    <meta property="twitter:image" content="https://songs.sumanonline.com/favicon.png" />
+<head>
+  <meta charset="UTF-8" />
+  <base href="/" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="canonical" href="https://songs.sumanonline.com/" />
+  <title>SumanMusic | Premium Music Streaming from Google Drive</title>
+  <meta name="description"
+    content="SumanMusic (Suman Music) is a high-end music streaming platform that connects directly to your Google Drive. Stream your personal music library anywhere with a premium interface." />
+  <meta name="keywords"
+    content="SumanMusic, Suman Music, music streaming, Google Drive music player, cloud music player, stream from drive, SumanOnline, personal music cloud" />
+  <meta name="author" content="SumanMusic" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1db954" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/logo192.png" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://songs.sumanonline.com/" />
+  <meta property="og:title" content="SumanMusic | Premium Music Streaming from Google Drive" />
+  <meta property="og:description"
+    content="Connect your Google Drive and start streaming your personal music library with SumanMusic's premium interface. No local storage required." />
+  <meta property="og:image" content="https://songs.sumanonline.com/favicon.png" />
+
+
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:url" content="https://songs.sumanonline.com/" />
+  <meta property="twitter:title" content="SumanMusic | Premium Music Streaming from Google Drive" />
+  <meta property="twitter:description"
+    content="Connect your Google Drive and start streaming your personal music library with SumanMusic's premium interface." />
+  <meta property="twitter:image" content="https://songs.sumanonline.com/favicon.png" />
+
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "SumanMusic",
+      "alternateName": "Suman Music",
+      "operatingSystem": "Web, Windows, macOS, Android, iOS",
+      "applicationCategory": "MultimediaApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "INR"
+      },
+      "description": "A premium music streaming platform that connects directly to your Google Drive personal music library.",
+      "url": "https://songs.sumanonline.com/",
+      "logo": "https://songs.sumanonline.com/favicon.png"
+    }
     </script>
-  </body>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1db954" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/logo192.png" />
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>

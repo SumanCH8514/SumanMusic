@@ -8,6 +8,18 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+# Firebase
+.firebase
+.firebaserc
+firebase-debug.log*
+firestore-debug.log*
+
+# Production Secrets
+.env.production
+.env.local
+.env.*.local
+
+# Build
 dist
 dist-ssr
 *.local
@@ -22,9 +34,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
 # Config files (now using env vars/templates)
-# src/config.js
-# src/lib/firebase.js
 .env
 index.php
 **/index.php
+.gitignore

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   collection, 
@@ -31,15 +32,19 @@ export const PlaylistProvider = ({ children }) => {
 
   useEffect(() => {
     if (!user && !isGuest) {
-      setPlaylists([]);
-      setLoading(false);
+      setTimeout(() => {
+        setPlaylists([]);
+        setLoading(false);
+      }, 0);
       return;
     }
 
     // Update hidden playlists when user changes
     const key = `suman_music_hidden_playlists_${user?.uid || 'guest'}`;
     const saved = localStorage.getItem(key);
-    setHiddenPlaylistIds(saved ? JSON.parse(saved) : []);
+    setTimeout(() => {
+      setHiddenPlaylistIds(saved ? JSON.parse(saved) : []);
+    }, 0);
 
     // Define queries
     let q;
