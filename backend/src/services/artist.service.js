@@ -1,5 +1,7 @@
-export async function fetchArtistImage(artist) {
+export async function fetchArtistImage(artist, env = {}) {
   if (!artist) return null;
+
+  // Provider 1: JioSaavn
   try {
     const saavnUrl = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(artist)}`;
     const res = await fetch(saavnUrl, {
@@ -28,5 +30,25 @@ export async function fetchArtistImage(artist) {
       }
     }
   } catch {}
+
+  // Provider 2: Last.fm (if configured via Cloudflare runtime bindings)
+  if (env?.LASTFM_API_KEY) {
+    try {
+      const lastfmUrl = `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artist)}&api_key=${env.LASTFM_API_KEY}&format=json`;
+      const res = await fetch(lastfmUrl, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const data = await res.json();
+        const images = data?.artist?.image;
+        if (Array.isArray(images) && images.length > 0) {
+          const best = images[images.length - 1]?.['#text'] || images[0]?.['#text'];
+          // Filter out empty strings or Last.fm's default grey placeholder
+          if (best && typeof best === 'string' && best.startsWith('http') && !best.includes('2a96cbd8b46e442fc41c2b86b821562f')) {
+            return best;
+          }
+        }
+      }
+    } catch {}
+  }
+
   return null;
 }

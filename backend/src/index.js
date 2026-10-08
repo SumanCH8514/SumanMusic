@@ -214,7 +214,7 @@ export default {
             });
           }
 
-          const foundImage = await fetchArtistImage(artist);
+          const foundImage = await fetchArtistImage(artist, env);
           if (foundImage) {
             await redisSet(env, cacheKey, foundImage, 1209600);
           } else {

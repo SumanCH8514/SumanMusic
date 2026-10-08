@@ -19,3 +19,6 @@ YOUTUBE_API_KEYS="YOUR_YOUTUBE_KEY_1,YOUR_YOUTUBE_KEY_2"
 # Upstash Redis REST API (for server-side caching)
 UPSTASH_REDIS_REST_URL="https://your-instance.upstash.io"
 UPSTASH_REDIS_REST_TOKEN="your_upstash_redis_rest_token"
+
+# Last.fm API Key (optional: for high-res artist avatar resolution fallback)
+LASTFM_API_KEY="your_lastfm_api_key"
