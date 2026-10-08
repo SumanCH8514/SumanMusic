@@ -8,7 +8,7 @@ class RedisClient {
     this.url = (ENV.REDIS?.REST_URL || '').trim().replace(/\/+$/, '');
     this.token = (ENV.REDIS?.REST_TOKEN || '').trim();
     this.isReadEnabled = Boolean(this.url && this.token);
-    this.isWriteEnabled = false;
+    this.isWriteEnabled = Boolean(this.url && this.token);
   }
 
   async fetch(path, options = {}) {

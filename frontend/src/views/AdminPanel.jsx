@@ -469,7 +469,6 @@ const AdminPanel = () => {
 
         </div>
 
-        {/* Metadata Engine & Provider Selection */}
         <div className="mt-8 md:mt-12 space-y-4 md:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
@@ -542,7 +541,6 @@ const AdminPanel = () => {
             </div>
 
             <div className="pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-              {/* Fallback Toggle */}
               <div className="flex items-center justify-between p-4 bg-black/40 border border-white/10 rounded-2xl">
                 <div className="pr-4">
                   <p className="text-sm font-bold text-white leading-tight">Multi-tier Auto Fallback</p>
@@ -562,7 +560,6 @@ const AdminPanel = () => {
                 </button>
               </div>
 
-              {/* Cache Purge */}
               <div className="flex items-center justify-between p-4 bg-black/40 border border-white/10 rounded-2xl">
                 <div className="pr-4">
                   <p className="text-sm font-bold text-white leading-tight">Purge Metadata Cache</p>

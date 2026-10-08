@@ -10,8 +10,6 @@
       "custom_domain": true
     }
   ],
-  // All secrets are loaded from .dev.vars (local) or Cloudflare Dashboard Secrets (production).
-  // See .dev.vars_example for the required variables.
   "vars": {},
   "observability": {
     "enabled": true

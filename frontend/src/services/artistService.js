@@ -1,15 +1,14 @@
 import { redisGet, redisSet } from './redis';
 import { ENV } from '../config/env';
+import { getMetadataConfig } from './metadata';
 
-const CACHE_PREFIX = 'artist_img_v3';
-const CACHE_TTL_SECONDS = 14 * 24 * 60 * 60; // 14 days
+const CACHE_PREFIX = 'artist_img_v4';
+const CACHE_TTL_SECONDS = 14 * 24 * 60 * 60;
 
-// In-Memory Fast Caches & Request Deduplication
 const memoryCache = new Map();
 const inFlightRequests = new Map();
-const claimedImageUrls = new Map(); // Tracks imageUrl -> artistKey to prevent duplicate photos
+const claimedImageUrls = new Map();
 
-// Blacklisted generic / placeholder image patterns
 const GENERIC_IMAGE_URLS = [
   'photo-1470225620780-dba8ba36b745',
   'placeholder',
@@ -24,7 +23,6 @@ const GENERIC_IMAGE_URLS = [
   'data:image',
 ];
 
-// Junk artist names / noise patterns
 const JUNK_ARTIST_NAMES = [
   /^\(?version\s*\d+\)?$/i,
   /^\(?official(\s*video|\s*audio|\s*music)?\)?$/i,
@@ -39,9 +37,6 @@ const JUNK_ARTIST_NAMES = [
   /^\(?feat\.?\s*[\w\s]+\)?$/i,
 ];
 
-/**
- * Validates if an artist name is legitimate
- */
 export const isValidArtistName = (name) => {
   if (!name || typeof name !== 'string') return false;
   const trimmed = name.trim();
@@ -58,9 +53,6 @@ export const cleanArtistName = (name) => {
     .trim();
 };
 
-/**
- * Normalizes artist name to a unique slug
- */
 export const getArtistSlug = (name) => {
   return (name || '')
     .toLowerCase()
@@ -69,19 +61,14 @@ export const getArtistSlug = (name) => {
     .replace(/^_|_$/g, '');
 };
 
-/**
- * Strict verification that returned API entity matches our target artist name
- */
 export const isNameMatch = (targetName, returnedName) => {
   if (!targetName || !returnedName) return false;
   const normTarget = targetName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const normReturned = returnedName.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!normTarget || !normReturned) return false;
   
-  // Exact match
   if (normTarget === normReturned) return true;
   
-  // Strong substring match (>= 65% overlap)
   if (normTarget.length >= 4 && (normReturned.includes(normTarget) || normTarget.includes(normReturned))) {
     const minLen = Math.min(normTarget.length, normReturned.length);
     const maxLen = Math.max(normTarget.length, normReturned.length);
@@ -91,23 +78,16 @@ export const isNameMatch = (targetName, returnedName) => {
   return false;
 };
 
-/**
- * Checks if a URL is a generic placeholder
- */
 export const isGenericImage = (url) => {
   if (!url || typeof url !== 'string' || url.length < 10) return true;
   return GENERIC_IMAGE_URLS.some(generic => url.includes(generic));
 };
 
-/**
- * Validates and claims an image URL for an artist to avoid duplicate photos
- */
 const claimImageUrl = (url, artistSlug) => {
   if (!url || isGenericImage(url)) return null;
 
   const existingOwner = claimedImageUrls.get(url);
   if (existingOwner && existingOwner !== artistSlug) {
-    // Another artist already claimed this exact image! Avoid duplicate.
     return null;
   }
 
@@ -115,14 +95,9 @@ const claimImageUrl = (url, artistSlug) => {
   return url;
 };
 
-// ── Multi-Provider Fetchers with Strict Name Matching ────────────────────────
-
-/**
- * Provider 1: SumanMusic Backend Worker & JioSaavn Edge Resolver
- */
-const fetchFromBackend = async (artistName, artistSlug) => {
+const fetchFromBackend = async (artistName, artistSlug, provider = 'auto', fallback = true) => {
   try {
-    const backendUrl = `${ENV.BACKEND_URL}/api/artist-image?artist=${encodeURIComponent(artistName)}`;
+    const backendUrl = `${ENV.BACKEND_URL}/api/artist-image?artist=${encodeURIComponent(artistName)}&provider=${encodeURIComponent(provider)}&fallback=${fallback}`;
     const res = await fetch(backendUrl, { signal: AbortSignal.timeout(2500) });
     if (res.ok) {
       const data = await res.json();
@@ -130,9 +105,7 @@ const fetchFromBackend = async (artistName, artistSlug) => {
         return claimImageUrl(data.imageUrl, artistSlug);
       }
     }
-  } catch {
-    // Fallback
-  }
+  } catch {}
   return null;
 };
 
@@ -150,15 +123,10 @@ const fetchFromTheAudioDB = async (artistName, artistSlug) => {
       const img = matched.strArtistThumb || matched.strArtistCutout || matched.strArtistFanart || null;
       return claimImageUrl(img, artistSlug);
     }
-  } catch {
-    // Ignore network failure
-  }
+  } catch {}
   return null;
 };
 
-/**
- * Provider 4: Wikipedia / Wikimedia API (with Strict Name Match)
- */
 const fetchFromWikipedia = async (artistName, artistSlug) => {
   try {
     const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(artistName)}&prop=pageimages&format=json&pithumbsize=600&origin=*`;
@@ -171,20 +139,15 @@ const fetchFromWikipedia = async (artistName, artistSlug) => {
       const page = pages[pageId];
       if (pageId && pageId !== '-1' && page?.thumbnail?.source) {
         if (page.title && !isNameMatch(artistName, page.title)) {
-          return null; // Rejected mismatch
+          return null;
         }
         return claimImageUrl(page.thumbnail.source, artistSlug);
       }
     }
-  } catch {
-    // Ignore network failure
-  }
+  } catch {}
   return null;
 };
 
-/**
- * Provider 5: Deezer API (with Strict Name Match)
- */
 const fetchFromDeezer = async (artistName, artistSlug) => {
   try {
     const url = `https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=1`;
@@ -197,15 +160,10 @@ const fetchFromDeezer = async (artistName, artistSlug) => {
       const img = matched.picture_xl || matched.picture_big || matched.picture_medium || null;
       return claimImageUrl(img, artistSlug);
     }
-  } catch {
-    // Ignore network failure
-  }
+  } catch {}
   return null;
 };
 
-/**
- * Provider 6: Last.fm API (with Strict Name Match)
- */
 const fetchFromLastFM = async (artistName, artistSlug) => {
   try {
     const apiKey = ENV.LASTFM?.API_KEY;
@@ -218,18 +176,15 @@ const fetchFromLastFM = async (artistName, artistSlug) => {
       const images = data.artist.image;
       if (Array.isArray(images) && images.length > 0) {
         const best = images[images.length - 1]?.['#text'] || images[0]?.['#text'];
-        return claimImageUrl(best, artistSlug);
+        if (best && typeof best === 'string' && best.startsWith('http') && !best.includes('2a96cbd8b46e442fc41c2b86b821562f')) {
+          return claimImageUrl(best, artistSlug);
+        }
       }
     }
-  } catch {
-    // Ignore network failure
-  }
+  } catch {}
   return null;
 };
 
-/**
- * Provider 7: YouTube Channel Avatar (with Strict Name Match)
- */
 const fetchFromYouTube = async (artistName, artistSlug) => {
   const keys = ENV.YOUTUBE.API_KEYS;
   if (!keys || keys.length === 0) return null;
@@ -250,27 +205,30 @@ const fetchFromYouTube = async (artistName, artistSlug) => {
       const best = thumbs.high?.url || thumbs.medium?.url || thumbs.default?.url || null;
       return claimImageUrl(best, artistSlug);
     }
-  } catch {
-    // Ignore network failure
-  }
+  } catch {}
   return null;
 };
 
-/**
- * Synchronous multi-tier check (Memory + LocalStorage) for instantaneous 0ms rendering
- */
+export const clearArtistCache = () => {
+  memoryCache.clear();
+  claimedImageUrls.clear();
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(`sm_cache_${CACHE_PREFIX}`))
+      .forEach(k => localStorage.removeItem(k));
+  } catch {}
+};
+
 export const getCachedArtistImageSync = (artistName) => {
   const cleanName = cleanArtistName(artistName);
   if (!cleanName) return null;
   const slug = getArtistSlug(cleanName);
 
-  // 1. Fast Memory Hit (0ms)
   if (memoryCache.has(slug)) {
     const val = memoryCache.get(slug);
     return val === '__not_found__' ? null : val;
   }
 
-  // 2. Synchronous Web Storage Hit (0ms on fresh page reload)
   try {
     const raw = localStorage.getItem(`sm_cache_${CACHE_PREFIX}_${slug}`);
     if (raw) {
@@ -287,31 +245,26 @@ export const getCachedArtistImageSync = (artistName) => {
   return null;
 };
 
-/**
- * High-performance, deduplicated, parallel artist image resolver
- */
 export const fetchArtistImage = async (artistName, fallbackSongCover = null) => {
   const cleanName = cleanArtistName(artistName);
   if (!cleanName || !isValidArtistName(cleanName)) {
     return !isGenericImage(fallbackSongCover) ? fallbackSongCover : null;
   }
 
+  const { provider = 'auto', fallback = true } = getMetadataConfig();
   const slug = getArtistSlug(cleanName);
-  const cacheKey = `${CACHE_PREFIX}_${slug}`;
+  const cacheKey = `${CACHE_PREFIX}_${provider}_${fallback ? 'fb' : 'nofb'}_${slug}`;
 
-  // 1. Instant Synchronous Memory Cache
   if (memoryCache.has(slug)) {
     const memVal = memoryCache.get(slug);
     return memVal === '__not_found__' ? (!isGenericImage(fallbackSongCover) ? fallbackSongCover : null) : memVal;
   }
 
-  // 2. In-Flight Request Deduplication (Avoid duplicate parallel queries for the same artist)
   if (inFlightRequests.has(slug)) {
     return await inFlightRequests.get(slug);
   }
 
   const task = (async () => {
-    // Check L2/L3 Redis Cache
     try {
       const cached = await redisGet(cacheKey);
       if (cached) {
@@ -322,34 +275,39 @@ export const fetchArtistImage = async (artistName, fallbackSongCover = null) => 
         claimImageUrl(cached, slug);
         return cached;
       }
-    } catch {
-      // Ignore cache read error
+    } catch {}
+
+    let imageUrl = null;
+
+    if (provider === 'lastfm') {
+      imageUrl = await fetchFromLastFM(cleanName, slug);
+      if (!imageUrl) {
+        imageUrl = await fetchFromBackend(cleanName, slug, provider, fallback);
+      }
+    } else {
+      imageUrl = await fetchFromBackend(cleanName, slug, provider, fallback);
     }
 
-    let imageUrl = await fetchFromBackend(cleanName, slug);
-
-    if (!imageUrl) {
-      const secondaryProviders = [
+    if (!imageUrl && fallback) {
+      const clientFallbackList = [
+        fetchFromLastFM(cleanName, slug),
         fetchFromTheAudioDB(cleanName, slug),
         fetchFromWikipedia(cleanName, slug),
         fetchFromDeezer(cleanName, slug),
-        fetchFromLastFM(cleanName, slug),
-        fetchFromYouTube(cleanName, slug),
+        fetchFromYouTube(cleanName, slug)
       ];
 
-      const results = await Promise.allSettled(secondaryProviders);
+      const results = await Promise.allSettled(clientFallbackList);
       imageUrl = results.find(r => r.status === 'fulfilled' && r.value)?.value;
     }
 
-    if (!imageUrl && cleanName.includes('.')) {
+    if (!imageUrl && fallback && cleanName.includes('.')) {
       const noDots = cleanName.replace(/\./g, '').replace(/\s+/g, ' ').trim();
-      imageUrl = await fetchFromBackend(noDots, slug) || await fetchFromWikipedia(noDots, slug);
+      imageUrl = await fetchFromBackend(noDots, slug, provider, fallback) || await fetchFromWikipedia(noDots, slug);
     }
 
-    // 6. Final verification & duplicate prevention
     const finalImage = imageUrl || (!isGenericImage(fallbackSongCover) ? claimImageUrl(fallbackSongCover, slug) : null);
 
-    // 7. Store in Memory Cache & Redis Cache
     if (finalImage) {
       memoryCache.set(slug, finalImage);
       try {
@@ -358,7 +316,7 @@ export const fetchArtistImage = async (artistName, fallbackSongCover = null) => 
     } else {
       memoryCache.set(slug, '__not_found__');
       try {
-        await redisSet(cacheKey, '__not_found__', 86400 * 3);
+        await redisSet(cacheKey, '__not_found__,', 86400 * 3);
       } catch (_) {}
     }
 
@@ -373,9 +331,6 @@ export const fetchArtistImage = async (artistName, fallbackSongCover = null) => 
   }
 };
 
-/**
- * Pre-warm artist images in background with throttled concurrency
- */
 export const prefetchArtistImages = (artists = []) => {
   if (!Array.isArray(artists) || artists.length === 0) return;
 
@@ -389,11 +344,10 @@ export const prefetchArtistImages = (artists = []) => {
     if (index >= validArtists.length) return;
     const name = validArtists[index++];
     fetchArtistImage(name).finally(() => {
-      setTimeout(runNext, 50); // Throttled 50ms stagger
+      setTimeout(runNext, 50);
     });
   };
 
-  // Run up to 3 concurrent prefetch workers
   runNext();
   runNext();
   runNext();

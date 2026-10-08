@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchExternalMetadata } from '../services/metadata';
-import { fetchLyrics, parseLrc } from '../services/lyrics';
+import { fetchLyrics, parseLrc, ensureLineWords } from '../services/lyrics';
 
 const isTitleMatch = (searchedTitle, candidateTrackName) => {
     if (!searchedTitle || !candidateTrackName) return false;
@@ -103,13 +103,16 @@ export const usePlayerMetadata = ({
         const loadLyrics = async () => {
             setIsLyricsLoading(true);
             try {
-                const data = await fetchLyrics(currentSong.artist, currentSong.title, currentSong.album);
+                const data = await fetchLyrics(currentSong.artist, currentSong.title, currentSong.album, currentSong.duration);
                 if (ignore) return;
 
-                if (data && data.syncedLyrics) {
+                if (data && Array.isArray(data.lines) && data.lines.length > 0) {
+                    setLyrics(ensureLineWords(data.lines));
+                } else if (data && data.syncedLyrics) {
                     setLyrics(parseLrc(data.syncedLyrics));
                 } else if (data && data.plainLyrics) {
-                    setLyrics([{ time: 0, text: data.plainLyrics }]);
+                    const rawLines = data.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+                    setLyrics(ensureLineWords(rawLines.map((text, i) => ({ time: i * 3.5, duration: 3.5, text, words: [] }))));
                 } else {
                     setLyrics([]);
                     if (!ignore) showToast("No Lyrics Found for this Song", "info");

@@ -15,6 +15,9 @@ import { cn } from '../lib/utils';
 import PlayingVisualizer from './PlayingVisualizer';
 import SpectrumVisualizer from './SpectrumVisualizer';
 import SongImage from './SongImage';
+import { KaraokeLyricLine } from './KaraokeLyricLine';
+import { LyricsFloatingMenu } from './LyricsFloatingMenu';
+import { fetchTranslations, getSongLyricsOffset, setSongLyricsOffset, fetchLyrics } from '../services/lyrics';
 import { saveTrackOffline, removeTrackOffline, isTrackOffline } from '../lib/offlineStorage';
 import { EQUALIZER_PRESETS } from '../hooks/useAudio';
 
@@ -556,7 +559,9 @@ const LyricsPanel = memo(({
   isLyricsLoading, lyrics, activeIndex, lyricsContainerRef, handleLyricsScroll,
   seek, duration, activeSong, setIsAutoScrollEnabled, isExpanded, onToggle,
   subTab, setSubTab
-}) => (
+}) => {
+  const { currentTime } = usePlayerProgress();
+  return (
   <motion.div
     layout
     initial={false}
@@ -645,12 +650,19 @@ const LyricsPanel = memo(({
                   </div>
                 ) : lyrics.length > 0 ? (
                   lyrics.map((line, i) => (
-                    <LyricLine
+                    <KaraokeLyricLine
                       key={i}
-                      text={line.text}
+                      line={line}
                       isActive={activeIndex === i}
+                      currentTime={currentTime + ((lyricsOffset || 0) / 1000)}
+                      size="sm"
+                      align="center"
                       onClick={() => {
-                        line.time > 0 && seek((line.time / duration) * 100);
+                        typeof line.time === 'number' && line.time >= 0 && duration > 0 && seek((line.time / duration) * 100);
+                        setIsAutoScrollEnabled(true);
+                      }}
+                      onWordClick={(wordTime) => {
+                        seek((wordTime / duration) * 100);
                         setIsAutoScrollEnabled(true);
                       }}
                     />
@@ -754,10 +766,10 @@ const LyricsPanel = memo(({
                   </div>
 
                   <button
-                    onClick={() => window.open(`https://genius.com/search?q=${encodeURIComponent(`${activeSong.artist} ${activeSong.title}`)}`, '_blank')}
+                    onClick={() => window.open('https://sumanonline.com', '_blank')}
                     className="w-full py-4 rounded-2xl border border-border-main/10 bg-bg-surface/50 hover:bg-bg-surface transition-all text-[10px] font-black uppercase tracking-[0.3em] text-text-secondary/60 hover:text-text-primary flex items-center justify-center gap-3 active:scale-[0.98] mt-10"
                   >
-                    View detailed credits on Genius
+                    A SumanOnline Web Services Project
                   </button>
                 </motion.div>
               </div>
@@ -773,7 +785,8 @@ const LyricsPanel = memo(({
       </div>
     )}
   </motion.div>
-));
+  );
+});
 
 const TimeDisplay = memo(({ currentTime, duration }) => (
   <div className="flex justify-between text-[11px] font-medium text-text-secondary/50 tracking-wide mt-1.5">
@@ -1043,18 +1056,23 @@ const DesktopQueueTab = memo(({ queue, currentSong, isPlaying, playSong, setOpti
   </motion.div>
 ));
 
-const DesktopLyricsTab = memo(({ lyrics, isLyricsLoading, duration, seek, isAutoScrollEnabled, setIsAutoScrollEnabled }) => {
+const DesktopLyricsTab = memo(({
+  lyrics, isLyricsLoading, duration, seek, isAutoScrollEnabled, setIsAutoScrollEnabled,
+  currentSong, lyricsOffset, onChangeOffset, lyricsSource, onChangeSource,
+  onReloadLyrics, isLyricsReloading, isTranslating, isTranslationLoading,
+  translations, onToggleTranslation, lyricsStyle = 'rhythmic', onChangeStyle
+}) => {
   const { currentTime } = usePlayerProgress();
   const lyricsContainerRef = useRef(null);
 
   const activeIndex = useMemo(() => {
     if (!lyrics || lyrics.length === 0) return -1;
-    const adjustedTime = currentTime + 0.15;
+    const adjustedTime = currentTime + 0.15 + ((lyricsOffset || 0) / 1000);
     return lyrics.findIndex((line, i) => {
       const nextLine = lyrics[i + 1];
       return adjustedTime >= line.time && (!nextLine || adjustedTime < nextLine.time);
     });
-  }, [lyrics, currentTime]);
+  }, [lyrics, currentTime, lyricsOffset]);
 
   useEffect(() => {
     if (lyrics?.length > 0 && lyricsContainerRef.current && isAutoScrollEnabled) {
@@ -1073,7 +1091,7 @@ const DesktopLyricsTab = memo(({ lyrics, isLyricsLoading, duration, seek, isAuto
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      className="space-y-6 pb-12 pr-4 pl-2 pt-2"
+      className="space-y-4 pb-20 pr-4 pl-2 pt-2 relative"
       ref={lyricsContainerRef}
     >
       {isLyricsLoading ? (
@@ -1082,23 +1100,45 @@ const DesktopLyricsTab = memo(({ lyrics, isLyricsLoading, duration, seek, isAuto
           <p className="text-sm font-bold text-text-primary uppercase tracking-widest">Loading Lyrics...</p>
         </div>
       ) : lyrics?.length > 0 ? (
-        lyrics.map((line, i) => (
-          <p
-            key={i}
-            onClick={() => {
-              if (line.time > 0) seek((line.time / duration) * 100);
-              setIsAutoScrollEnabled(true);
-            }}
-            className={cn(
-              "text-2xl lg:text-3xl font-black transition-all duration-300 cursor-pointer leading-snug",
-              i === activeIndex
-                ? "text-primary drop-shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)] scale-[1.02] origin-left"
-                : "text-text-secondary/40 hover:text-text-secondary"
-            )}
-          >
-            {line.text}
-          </p>
-        ))
+        <>
+          {lyrics.map((line, i) => (
+            <KaraokeLyricLine
+              key={i}
+              line={line}
+              isActive={i === activeIndex}
+              currentTime={currentTime + ((lyricsOffset || 0) / 1000)}
+              translationText={isTranslating && translations ? translations[i] : null}
+              size="md"
+              align="left"
+              lyricsStyle={lyricsStyle}
+              onClick={() => {
+                if (typeof line.time === 'number' && line.time >= 0 && duration > 0) seek((line.time / duration) * 100);
+                setIsAutoScrollEnabled(true);
+              }}
+              onWordClick={(wordTime) => {
+                seek((wordTime / duration) * 100);
+                setIsAutoScrollEnabled(true);
+              }}
+            />
+          ))}
+
+          <div className="sticky bottom-2 right-0 flex justify-end pointer-events-auto pt-4 pr-1 z-30">
+            <LyricsFloatingMenu
+              currentSong={currentSong}
+              currentSource={lyricsSource}
+              currentStyle={lyricsStyle}
+              offset={lyricsOffset}
+              isTranslating={isTranslating}
+              isTranslationLoading={isTranslationLoading}
+              isReloading={isLyricsReloading}
+              onToggleTranslation={onToggleTranslation}
+              onChangeOffset={onChangeOffset}
+              onChangeSource={onChangeSource}
+              onChangeStyle={onChangeStyle}
+              onReload={onReloadLyrics}
+            />
+          </div>
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center text-center py-20 gap-4 opacity-50">
           <p className="text-xl font-bold text-text-secondary">Lyrics unavailable</p>
@@ -1145,12 +1185,60 @@ const DesktopCreditsTab = memo(({ activeSong }) => (
 
     <div className="pt-4 space-y-4">
       <button
-        onClick={() => window.open(`https://genius.com/search?q=${encodeURIComponent(`${activeSong.artist} ${activeSong.title}`)}`, '_blank')}
+        onClick={() => window.open('https://sumanonline.com', '_blank')}
         className="w-full py-3.5 rounded-2xl border border-border-main/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all text-xs font-bold uppercase tracking-widest text-text-secondary hover:text-text-primary flex items-center justify-center gap-2 active:scale-95 shadow-sm"
       >
-        View on Genius
+        A SumanOnline Web Services Project
       </button>
     </div>
+  </motion.div>
+));
+
+const DesktopRelatedTab = memo(({ relatedSongs, playSong, setOptionsSong }) => (
+  <motion.div
+    key="desktop-related"
+    initial={{ opacity: 0, x: 20 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: 20 }}
+    className="space-y-2 pb-16 pr-2 pl-1 pt-1"
+  >
+    {relatedSongs?.length > 0 ? (
+      relatedSongs.map((song) => (
+        <div
+          key={song.id}
+          className="flex items-center gap-3.5 p-2.5 rounded-2xl transition-all cursor-pointer group/rel hover:bg-black/5 dark:hover:bg-white/5 active:scale-[0.99]"
+          onClick={() => playSong(song)}
+        >
+          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 relative shadow-sm bg-bg-surface">
+            <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover group-hover/rel:scale-105 transition-transform duration-300" />
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/rel:opacity-100 transition-opacity">
+              <Play className="w-4 h-4 text-white ml-0.5 fill-white" />
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold truncate leading-tight text-text-primary group-hover/rel:text-primary transition-colors">
+              {song.title}
+            </p>
+            <p className="text-xs text-text-secondary/70 truncate mt-1">
+              {song.artist}
+            </p>
+          </div>
+          <div className="flex items-center pr-1">
+            <MoreHorizontal
+              className="w-4 h-4 text-text-secondary hover:text-text-primary transition-colors cursor-pointer opacity-0 group-hover/rel:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOptionsSong(song);
+              }}
+            />
+          </div>
+        </div>
+      ))
+    ) : (
+      <div className="flex flex-col items-center justify-center text-center py-20 gap-3 opacity-50">
+        <p className="text-sm font-bold text-text-secondary">No related tracks found</p>
+      </div>
+    )}
   </motion.div>
 ));
 
@@ -1214,6 +1302,102 @@ const MusicPlayer = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isAppRoute = location.pathname.startsWith('/app');
+
+  const [lyricsOffset, setLyricsOffset] = useState(0);
+  const [lyricsSource, setLyricsSource] = useState('auto');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isTranslationLoading, setIsTranslationLoading] = useState(false);
+  const [translations, setTranslations] = useState([]);
+  const [isLyricsReloading, setIsLyricsReloading] = useState(false);
+  const [customLyrics, setCustomLyrics] = useState(null);
+  const [lyricsStyle, setLyricsStyle] = useState(() => {
+    try {
+      return localStorage.getItem('sumanmusic_lyrics_style') || 'rhythmic';
+    } catch {
+      return 'rhythmic';
+    }
+  });
+
+  const handleChangeStyle = useCallback((newStyle) => {
+    setLyricsStyle(newStyle);
+    try {
+      localStorage.setItem('sumanmusic_lyrics_style', newStyle);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (currentSong?.id) {
+      setLyricsOffset(getSongLyricsOffset(currentSong.id));
+      setTranslations([]);
+      setIsTranslating(false);
+      setCustomLyrics(null);
+    }
+  }, [currentSong?.id]);
+
+  const activeLyrics = customLyrics || lyrics;
+
+  const handleChangeOffset = useCallback((newOffset) => {
+    setLyricsOffset(newOffset);
+    if (currentSong?.id) {
+      setSongLyricsOffset(currentSong.id, newOffset);
+    }
+  }, [currentSong?.id]);
+
+  const handleToggleTranslation = useCallback(async () => {
+    if (isTranslating) {
+      setIsTranslating(false);
+      return;
+    }
+    setIsTranslating(true);
+    if (translations.length === 0 && activeLyrics?.length > 0) {
+      setIsTranslationLoading(true);
+      try {
+        const trans = await fetchTranslations(activeLyrics);
+        setTranslations(trans);
+      } catch {
+        showToast("Failed to load translations", "error");
+      } finally {
+        setIsTranslationLoading(false);
+      }
+    }
+  }, [isTranslating, translations.length, activeLyrics, showToast]);
+
+  const handleChangeSource = useCallback(async (newSource) => {
+    setLyricsSource(newSource);
+    setIsLyricsReloading(true);
+    try {
+      const data = await fetchLyrics(currentSong.artist, currentSong.title, currentSong.album, currentSong.duration, newSource, true);
+      if (data?.lines?.length > 0) {
+        setCustomLyrics(data.lines);
+        setTranslations([]);
+        showToast(`Switched lyrics to ${newSource}`, "success");
+      } else {
+        showToast(`No lyrics found from ${newSource}`, "info");
+      }
+    } catch {
+      showToast("Failed to switch lyrics source", "error");
+    } finally {
+      setIsLyricsReloading(false);
+    }
+  }, [currentSong, showToast]);
+
+  const handleReloadLyrics = useCallback(async () => {
+    setIsLyricsReloading(true);
+    try {
+      const data = await fetchLyrics(currentSong.artist, currentSong.title, currentSong.album, currentSong.duration, lyricsSource, true);
+      if (data?.lines?.length > 0) {
+        setCustomLyrics(data.lines);
+        setTranslations([]);
+        showToast("Lyrics reloaded", "success");
+      } else {
+        showToast("No lyrics found", "info");
+      }
+    } catch {
+      showToast("Failed to reload lyrics", "error");
+    } finally {
+      setIsLyricsReloading(false);
+    }
+  }, [currentSong, lyricsSource, showToast]);
 
   const relatedSongs = useMemo(() => {
     if (!currentSong || !songs) return [];
@@ -1279,16 +1463,18 @@ const MusicPlayer = () => {
   const autoScrollTimeoutRef = useRef(null);
 
   const activeIndex = useMemo(() => {
-    if (!lyrics.length) return -1;
-    const adjustedTime = currentTime + 0.15;
-    return lyrics.findIndex((line, i) => {
-      const nextLine = lyrics[i + 1];
+    const list = activeLyrics || lyrics;
+    if (!list || list.length === 0) return -1;
+    const adjustedTime = currentTime + 0.15 + ((lyricsOffset || 0) / 1000);
+    return list.findIndex((line, i) => {
+      const nextLine = list[i + 1];
       return adjustedTime >= line.time && (!nextLine || adjustedTime < nextLine.time);
     });
-  }, [lyrics, currentTime]);
+  }, [activeLyrics, lyrics, currentTime, lyricsOffset]);
 
   useEffect(() => {
-    if (activeTab === 'lyrics' && lyrics.length > 0 && lyricsContainerRef.current && isAutoScrollEnabled) {
+    const list = activeLyrics || lyrics;
+    if (activeTab === 'lyrics' && list?.length > 0 && lyricsContainerRef.current && isAutoScrollEnabled) {
       const isMobile = window.innerWidth < 768;
       if (isMobile && isTabCollapsed) return;
 
@@ -1299,7 +1485,7 @@ const MusicPlayer = () => {
         }
       }
     }
-  }, [activeIndex, activeTab, lyrics, isAutoScrollEnabled, isTabCollapsed]);
+  }, [activeIndex, activeTab, activeLyrics, lyrics, isAutoScrollEnabled, isTabCollapsed]);
 
   const handleLyricsScroll = useCallback(() => {
     if (!isAutoScrollEnabled) {
@@ -1786,25 +1972,46 @@ const MusicPlayer = () => {
                               transition={{ duration: 0.3 }}
                               className="absolute inset-0 overflow-hidden flex flex-col"
                             >
-                              <div className="flex items-center gap-6 px-6 pt-6 pb-2 shrink-0">
-                                <button
-                                  onClick={() => setLyricsSubTab('lyrics')}
-                                  className={cn(
-                                    "text-[10px] font-black uppercase tracking-[0.3em] transition-all",
-                                    lyricsSubTab === 'lyrics' ? "text-primary" : "text-white/30"
-                                  )}
-                                >
-                                  LYRICS
-                                </button>
-                                <button
-                                  onClick={() => setLyricsSubTab('credits')}
-                                  className={cn(
-                                    "text-[10px] font-black uppercase tracking-[0.3em] transition-all",
-                                    lyricsSubTab === 'credits' ? "text-primary" : "text-white/30"
-                                  )}
-                                >
-                                  CREDITS
-                                </button>
+                              <div className="flex items-center justify-between px-6 pt-5 pb-2 shrink-0 z-30">
+                                <div className="flex items-center gap-6">
+                                  <button
+                                    onClick={() => setLyricsSubTab('lyrics')}
+                                    className={cn(
+                                      "text-[10px] font-black uppercase tracking-[0.3em] transition-all",
+                                      lyricsSubTab === 'lyrics' ? "text-primary" : "text-white/30"
+                                    )}
+                                  >
+                                    LYRICS
+                                  </button>
+                                  <button
+                                    onClick={() => setLyricsSubTab('credits')}
+                                    className={cn(
+                                      "text-[10px] font-black uppercase tracking-[0.3em] transition-all",
+                                      lyricsSubTab === 'credits' ? "text-primary" : "text-white/30"
+                                    )}
+                                  >
+                                    CREDITS
+                                  </button>
+                                </div>
+
+                                {lyricsSubTab === 'lyrics' && (
+                                  <LyricsFloatingMenu
+                                    currentSong={currentSong}
+                                    currentSource={lyricsSource}
+                                    currentStyle={lyricsStyle}
+                                    offset={lyricsOffset}
+                                    isTranslating={isTranslating}
+                                    isTranslationLoading={isTranslationLoading}
+                                    isReloading={isLyricsReloading}
+                                    onToggleTranslation={handleToggleTranslation}
+                                    onChangeOffset={handleChangeOffset}
+                                    onChangeSource={handleChangeSource}
+                                    onChangeStyle={handleChangeStyle}
+                                    onReload={handleReloadLyrics}
+                                    placement="top"
+                                    size="sm"
+                                  />
+                                )}
                               </div>
 
                               <div className="flex-1 overflow-hidden relative">
@@ -1823,24 +2030,26 @@ const MusicPlayer = () => {
                                         <div className="flex flex-col items-center justify-center py-20 gap-4">
                                           <Loader2 className="w-10 h-10 text-white/50 animate-spin" />
                                         </div>
-                                      ) : lyrics.length > 0 ? (
-                                        lyrics.map((line, i) => (
-                                          <motion.p
+                                      ) : activeLyrics.length > 0 ? (
+                                        activeLyrics.map((line, i) => (
+                                          <KaraokeLyricLine
                                             key={i}
-                                            initial={false}
-                                            animate={{ opacity: i === activeIndex ? 1 : 0.4 }}
-                                            transition={{ duration: 0.3 }}
-                                            className={cn(
-                                              "text-xl font-medium text-left transition-all duration-300 leading-snug",
-                                              i === activeIndex ? "text-[#ffc800]" : "text-white/50 cursor-pointer hover:opacity-80"
-                                            )}
+                                            line={line}
+                                            isActive={i === activeIndex}
+                                            currentTime={currentTime + ((lyricsOffset || 0) / 1000)}
+                                            translationText={isTranslating && translations ? translations[i] : null}
+                                            size="sm"
+                                            align="left"
+                                            lyricsStyle={lyricsStyle}
                                             onClick={() => {
-                                              line.time > 0 && seek((line.time / duration) * 100);
+                                              typeof line.time === 'number' && line.time >= 0 && duration > 0 && seek((line.time / duration) * 100);
                                               setIsAutoScrollEnabled(true);
                                             }}
-                                          >
-                                            {line.text}
-                                          </motion.p>
+                                            onWordClick={(wordTime) => {
+                                              seek((wordTime / duration) * 100);
+                                              setIsAutoScrollEnabled(true);
+                                            }}
+                                          />
                                         ))
                                       ) : (
                                         <div className="flex flex-col items-center justify-center text-center py-20 gap-4 opacity-50">
@@ -1903,15 +2112,17 @@ const MusicPlayer = () => {
                                         </div>
 
                                         <button
-                                          onClick={() => window.open(`https://genius.com/search?q=${encodeURIComponent(`${activeSong.artist} ${activeSong.title}`)}`, '_blank')}
+                                          onClick={() => window.open('https://sumanonline.com', '_blank')}
                                           className="w-full py-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all text-[10px] font-black uppercase tracking-[0.3em] text-white/60 hover:text-white flex items-center justify-center gap-3 active:scale-[0.98] mt-10"
                                         >
-                                          VIEW DETAILED CREDITS ON GENIUS
+                                          A SumanOnline Web Services Project
                                         </button>
                                       </div>
                                     </motion.div>
                                   )}
                                 </AnimatePresence>
+
+
                               </div>
                             </motion.div>
                           )}
@@ -2029,7 +2240,7 @@ const MusicPlayer = () => {
               >
                 <DesktopAmbientBackdrop cover={activeSong.cover} />
 
-                <div className="flex w-full h-full pt-6 px-6 pb-1 lg:pt-8 lg:px-10 lg:pb-1.5 gap-8 lg:gap-14 overflow-hidden mx-auto max-w-[1500px] relative z-10 items-center justify-center">
+                <div className="flex w-full h-full pt-6 px-6 pb-2 lg:pt-8 lg:px-10 lg:pb-3 gap-8 lg:gap-14 overflow-hidden mx-auto max-w-[1500px] relative z-10 items-center justify-center">
                   <div className="flex-1 flex flex-col items-center justify-between relative min-h-0 min-w-0 h-full pt-1 pb-0">
                     <div className="flex-1 flex items-center justify-center w-full min-h-0">
                       <div className="relative w-full max-w-[min(500px,58vh)] aspect-square rounded-3xl overflow-hidden shadow-[0_20px_50px_-15px_rgba(0,0,0,0.15)] dark:shadow-[0_30px_90px_rgba(0,0,0,0.9)] ring-1 ring-black/10 dark:ring-white/10 transition-all duration-700 ease-out group/hero flex items-center justify-center">
@@ -2047,19 +2258,19 @@ const MusicPlayer = () => {
 
                   <div className="w-[400px] lg:w-[460px] flex flex-col shrink-0 h-full relative glass-premium rounded-3xl p-5 border border-black/10 dark:border-white/10 shadow-xl dark:shadow-2xl overflow-hidden backdrop-blur-2xl">
                     <div className="flex items-center justify-between pb-3.5 border-b border-border-main/10 shrink-0">
-                      <div className="flex items-center gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
-                        {['upnext', 'lyrics', 'credits'].map((tab) => (
+                      <div className="flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+                        {['upnext', 'lyrics', 'related', 'credits'].map((tab) => (
                           <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={cn(
-                              "px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
+                              "px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all",
                               activeTab === tab
                                 ? "bg-white text-text-primary shadow-sm dark:bg-white/15 dark:text-white"
                                 : "text-text-secondary hover:text-text-primary"
                             )}
                           >
-                            {tab === 'upnext' ? 'Up Next' : tab === 'lyrics' ? 'Lyrics' : 'Credits'}
+                            {tab === 'upnext' ? 'Up Next' : tab === 'lyrics' ? 'Lyrics' : tab === 'related' ? 'Related' : 'Credits'}
                           </button>
                         ))}
                       </div>
@@ -2087,17 +2298,38 @@ const MusicPlayer = () => {
 
                         {activeTab === 'lyrics' && (
                           <DesktopLyricsTab
-                            lyrics={lyrics}
-                            isLyricsLoading={isLyricsLoading}
+                            lyrics={activeLyrics}
+                            isLyricsLoading={isLyricsLoading || isLyricsReloading}
                             duration={duration}
                             seek={seek}
                             isAutoScrollEnabled={isAutoScrollEnabled}
                             setIsAutoScrollEnabled={setIsAutoScrollEnabled}
+                            currentSong={currentSong}
+                            lyricsOffset={lyricsOffset}
+                            onChangeOffset={handleChangeOffset}
+                            lyricsSource={lyricsSource}
+                            onChangeSource={handleChangeSource}
+                            onReloadLyrics={handleReloadLyrics}
+                            isLyricsReloading={isLyricsReloading}
+                            isTranslating={isTranslating}
+                            isTranslationLoading={isTranslationLoading}
+                            translations={translations}
+                            onToggleTranslation={handleToggleTranslation}
+                            lyricsStyle={lyricsStyle}
+                            onChangeStyle={handleChangeStyle}
                           />
                         )}
 
                         {activeTab === 'credits' && (
                           <DesktopCreditsTab activeSong={activeSong} />
+                        )}
+
+                        {activeTab === 'related' && (
+                          <DesktopRelatedTab
+                            relatedSongs={relatedSongs}
+                            playSong={playSong}
+                            setOptionsSong={setOptionsSong}
+                          />
                         )}
                       </AnimatePresence>
                     </div>

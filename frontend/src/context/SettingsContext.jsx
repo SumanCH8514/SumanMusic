@@ -1,9 +1,9 @@
-/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db } from '../lib/firebase';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { setMetadataConfig, clearMetadataCache } from '../services/metadata';
+import { clearArtistCache } from '../services/artistService';
 
 const SettingsContext = createContext(null);
 
@@ -11,9 +11,8 @@ export const SettingsProvider = ({ children }) => {
   const { user, isGuest } = useAuth();
   const [isOnlineLibraryEnabled, setIsOnlineLibraryEnabled] = useState(true);
   const [isVoiceSearchEnabled, setIsVoiceSearchEnabled] = useState(true);
-  const [onlineLibraryAccess, setOnlineLibraryAccess] = useState('all'); // 'all' or 'logged_in'
+  const [onlineLibraryAccess, setOnlineLibraryAccess] = useState('all');
   
-  // Metadata provider settings
   const [metadataProvider, setMetadataProvider] = useState(() => {
     try {
       return localStorage.getItem('suman_meta_provider') || 'auto';
@@ -33,13 +32,11 @@ export const SettingsProvider = ({ children }) => {
 
   const [isLoading, setIsLoading] = useState(true);
 
-  // Keep metadata service in sync whenever state changes
   useEffect(() => {
     setMetadataConfig({ provider: metadataProvider, fallback: metadataFallback });
   }, [metadataProvider, metadataFallback]);
 
   useEffect(() => {
-    // Listen to global settings in Firebase
     const docRef = doc(db, 'settings', 'global');
 
     const unsubscribe = onSnapshot(docRef, 
@@ -64,23 +61,21 @@ export const SettingsProvider = ({ children }) => {
             try { localStorage.setItem('suman_meta_fallback', String(data.metadataFallback)); } catch {}
           }
         } else if (user?.role === 'admin') {
-          // Initialize if not exists
           setDoc(docRef, {
             isOnlineLibraryEnabled: true,
             isVoiceSearchEnabled: true,
             onlineLibraryAccess: 'all',
             metadataProvider: 'auto',
             metadataFallback: true
-          }).catch(err => console.error("Failed to init global settings:", err));
+          }).catch(err => console.error(err));
         }
         setIsLoading(false);
       },
       (err) => {
         if (err.code === 'permission-denied') {
-          console.warn("[Settings] Permission denied for global settings. Defaulting to restricted mode for security.");
           setOnlineLibraryAccess('logged_in');
         } else {
-          console.error("[Settings] Global settings error:", err.message);
+          console.error(err.message);
         }
         setIsLoading(false);
       }
@@ -96,7 +91,7 @@ export const SettingsProvider = ({ children }) => {
         const docRef = doc(db, 'settings', 'global');
         await setDoc(docRef, { isOnlineLibraryEnabled: enabled }, { merge: true });
       } catch (err) {
-        console.error("Failed to update Online Library toggle:", err);
+        console.error(err);
       }
     }
   }, [user]);
@@ -108,7 +103,7 @@ export const SettingsProvider = ({ children }) => {
         const docRef = doc(db, 'settings', 'global');
         await setDoc(docRef, { isVoiceSearchEnabled: enabled }, { merge: true });
       } catch (err) {
-        console.error("Failed to update Voice Search toggle:", err);
+        console.error(err);
       }
     }
   }, [user]);
@@ -120,7 +115,7 @@ export const SettingsProvider = ({ children }) => {
         const docRef = doc(db, 'settings', 'global');
         await setDoc(docRef, { onlineLibraryAccess: access }, { merge: true });
       } catch (err) {
-        console.error("Failed to update Online Library access:", err);
+        console.error(err);
       }
     }
   }, [user]);
@@ -134,7 +129,7 @@ export const SettingsProvider = ({ children }) => {
         const docRef = doc(db, 'settings', 'global');
         await setDoc(docRef, { metadataProvider: provider }, { merge: true });
       } catch (err) {
-        console.error("Failed to update metadata provider:", err);
+        console.error(err);
       }
     }
   }, [user]);
@@ -148,16 +143,14 @@ export const SettingsProvider = ({ children }) => {
         const docRef = doc(db, 'settings', 'global');
         await setDoc(docRef, { metadataFallback: fallback }, { merge: true });
       } catch (err) {
-        console.error("Failed to update metadata fallback:", err);
+        console.error(err);
       }
     }
   }, [user]);
 
   const canAccessOnline = React.useMemo(() => {
-    // If feature is totally disabled
     if (!isOnlineLibraryEnabled) return false;
     
-    // If feature is restricted to logged-in users
     if (onlineLibraryAccess === 'logged_in') {
       const guestMatch = isGuest || (user?.uid && String(user.uid).startsWith('guest-'));
       if (guestMatch || !user) return false;
@@ -165,6 +158,11 @@ export const SettingsProvider = ({ children }) => {
     
     return true;
   }, [isOnlineLibraryEnabled, onlineLibraryAccess, isGuest, user]);
+
+  const handleClearCaches = useCallback(() => {
+    clearMetadataCache();
+    clearArtistCache();
+  }, []);
 
   return (
     <SettingsContext.Provider value={{
@@ -178,7 +176,7 @@ export const SettingsProvider = ({ children }) => {
       updateOnlineLibraryAccess,
       updateMetadataProvider,
       updateMetadataFallback,
-      clearMetadataCache,
+      clearMetadataCache: handleClearCaches,
       canAccessOnline,
       isLoading
     }}>

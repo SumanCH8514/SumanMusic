@@ -305,7 +305,6 @@ async function fetchSinglePass(artist, title, env = {}, preferredProvider = 'aut
       }
     } catch {}
 
-    // If fallback is disabled and we just tested the preferred provider, stop here
     if (!enableFallback && normPreferred !== 'auto') {
       break;
     }

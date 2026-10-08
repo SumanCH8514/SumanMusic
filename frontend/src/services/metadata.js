@@ -5,7 +5,6 @@ const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000;
 
 const memoryCache = new Map();
 
-// Active provider configuration (synced from SettingsContext / localStorage)
 let activeProvider = (() => {
   try { return localStorage.getItem('suman_meta_provider') || 'auto'; } catch { return 'auto'; }
 })();
@@ -116,9 +115,6 @@ const cleanQuery = (artist, title) => {
   return `${a} ${t}`.trim() || `${t}`.trim() || `${title}`.trim();
 };
 
-/**
- * Provider 1: Apple Music (iTunes API)
- */
 const fetchFromITunes = async (artist, title) => {
   const query = cleanQuery(artist, title);
   if (!query) return null;
@@ -171,9 +167,6 @@ const fetchFromITunes = async (artist, title) => {
   return null;
 };
 
-/**
- * Provider 2: JioSaavn API
- */
 const fetchFromJioSaavn = async (artist, title) => {
   const query = cleanQuery(artist, title);
   if (!query) return null;
@@ -220,9 +213,6 @@ const fetchFromJioSaavn = async (artist, title) => {
   return null;
 };
 
-/**
- * Provider 3: Last.fm Track API
- */
 const fetchFromLastFM = async (artist, title) => {
   const apiKey = ENV.LASTFM?.API_KEY;
   if (!apiKey || !title) return null;
@@ -260,9 +250,6 @@ const fetchFromLastFM = async (artist, title) => {
   return null;
 };
 
-/**
- * Provider 4: Deezer API
- */
 const fetchFromDeezer = async (artist, title) => {
   const query = cleanQuery(artist, title);
   if (!query) return null;
@@ -290,9 +277,6 @@ const fetchFromDeezer = async (artist, title) => {
   return null;
 };
 
-/**
- * Provider 5: SumanMusic Edge Worker Backend (/api/metadata)
- */
 const fetchFromBackendWorker = async (artist, title, provider = 'auto', fallback = true) => {
   try {
     const url = `${ENV.BACKEND_URL}/api/metadata?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}&provider=${encodeURIComponent(provider)}&fallback=${fallback}`;
@@ -307,10 +291,6 @@ const fetchFromBackendWorker = async (artist, title, provider = 'auto', fallback
   return null;
 };
 
-/**
- * Main External Metadata Resolver
- * Respects admin provider selection and fallback policy
- */
 export const fetchExternalMetadata = async (artist, title, options = {}) => {
   if (!title) return null;
 
@@ -325,40 +305,38 @@ export const fetchExternalMetadata = async (artist, title, options = {}) => {
     return cached;
   }
 
-  // 1. Try Backend Worker first (features Redis cache, Cloudflare edge, and server-side secret bindings)
-  let metadata = await fetchFromBackendWorker(safeArtist, title, provider, fallback);
+  const clientDispatch = {
+    apple: () => fetchFromITunes(safeArtist, title),
+    jiosaavn: () => fetchFromJioSaavn(safeArtist, title),
+    lastfm: () => fetchFromLastFM(safeArtist, title),
+    deezer: () => fetchFromDeezer(safeArtist, title)
+  };
 
-  // 2. Client-side fetcher dispatch if worker returns no result or is offline
-  if (!metadata) {
-    const clientDispatch = {
-      apple: () => fetchFromITunes(safeArtist, title),
-      jiosaavn: () => fetchFromJioSaavn(safeArtist, title),
-      lastfm: () => fetchFromLastFM(safeArtist, title),
-      deezer: () => fetchFromDeezer(safeArtist, title)
-    };
+  let metadata = null;
 
-    const clientOrder = ['apple', 'jiosaavn', 'lastfm', 'deezer'];
-    let executionQueue = [];
-
-    if (provider !== 'auto' && clientDispatch[provider]) {
-      executionQueue = [provider];
-      if (fallback) {
-        executionQueue = executionQueue.concat(clientOrder.filter(p => p !== provider));
-      }
-    } else {
-      executionQueue = clientOrder;
+  if (provider !== 'auto' && clientDispatch[provider]) {
+    metadata = await clientDispatch[provider]();
+    if (metadata && (metadata.cover || metadata.title)) {
+      setCachedMetadata(cacheKey, metadata);
+      return metadata;
     }
+    if (!fallback) {
+      setCachedMetadata(cacheKey, { _notFound: true });
+      return null;
+    }
+  }
 
-    for (const key of executionQueue) {
+  metadata = await fetchFromBackendWorker(safeArtist, title, provider, fallback);
+
+  if (!metadata && fallback) {
+    const fallbackOrder = ['apple', 'jiosaavn', 'lastfm', 'deezer'].filter(p => p !== provider);
+    for (const key of fallbackOrder) {
       const fetcher = clientDispatch[key];
       if (fetcher) {
         metadata = await fetcher();
         if (metadata && (metadata.cover || metadata.title)) {
           break;
         }
-      }
-      if (!fallback && provider !== 'auto') {
-        break;
       }
     }
   }

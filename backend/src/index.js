@@ -181,18 +181,25 @@ export default {
           const title = url.searchParams.get('title') || '';
           const album = url.searchParams.get('album') || '';
           const duration = parseFloat(url.searchParams.get('duration') || '0');
+          const source = (url.searchParams.get('source') || 'auto').toLowerCase();
+          const forceReload = url.searchParams.get('reload') === 'true';
 
-          const cacheKey = `lyrics_${artist}_${title}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
-          const cached = await redisGet(env, cacheKey);
-          if (cached) {
-            return jsonResponse(cached, 200, {
-              'X-Cache': 'HIT-REDIS',
-              'Cache-Control': 'public, max-age=86400'
-            });
+          const cleanA = artist.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)[0].replace(/\s*(?:feat|ft)\.?.*$/i, "").trim().toLowerCase();
+          const cleanT = title.replace(/\s*\(.*?\)/g, '').replace(/\s*\[.*?\]/g, '').trim().toLowerCase();
+          const cacheKey = `lyrics_v2_${cleanA}_${cleanT}_${source}`.replace(/[^a-z0-9]/g, '_');
+
+          if (!forceReload) {
+            const cached = await redisGet(env, cacheKey);
+            if (cached) {
+              return jsonResponse(cached, 200, {
+                'X-Cache': 'HIT-REDIS',
+                'Cache-Control': 'public, max-age=86400'
+              });
+            }
           }
 
-          const lyrics = await fetchLyrics(artist, title, album, duration);
-          if (lyrics) {
+          const lyrics = await fetchLyrics(artist, title, album, duration, source);
+          if (lyrics && (lyrics.lines?.length > 0 || lyrics.plainLyrics)) {
             await redisSet(env, cacheKey, lyrics, 604800);
           }
           return jsonResponse(lyrics, 200, {
@@ -201,13 +208,70 @@ export default {
           });
         }
 
+        if (pathname === '/api/translate') {
+          let lines = [];
+          if (request.method === 'POST') {
+            try {
+              const body = await request.json();
+              lines = Array.isArray(body.lines) ? body.lines : [];
+            } catch {}
+          } else {
+            const q = url.searchParams.get('q');
+            if (q) lines = [q];
+          }
+
+          const target = url.searchParams.get('target') || 'en';
+          if (!lines || lines.length === 0) {
+            return jsonResponse({ translations: [] }, 200);
+          }
+
+          const joinedText = lines.join('\n');
+          const hash = Array.from(joinedText.slice(0, 50)).reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) >>> 0, 0);
+          const cacheKey = `trans_${target}_${hash}_${lines.length}`;
+
+          const cached = await redisGet(env, cacheKey);
+          if (cached && Array.isArray(cached)) {
+            return jsonResponse({ translations: cached }, 200, {
+              'X-Cache': 'HIT-REDIS',
+              'Cache-Control': 'public, max-age=604800'
+            });
+          }
+
+          try {
+            const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(joinedText)}`;
+            const gRes = await fetch(gUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*'
+              }
+            });
+            if (gRes.ok) {
+              const gData = await gRes.json();
+              const translatedFull = Array.isArray(gData[0]) ? gData[0].map(x => x[0]).join('') : '';
+              const translatedLines = translatedFull.split('\n');
+              const finalTranslations = lines.map((_, i) => translatedLines[i] || '');
+              await redisSet(env, cacheKey, finalTranslations, 604800);
+              return jsonResponse({ translations: finalTranslations }, 200, {
+                'X-Cache': 'MISS',
+                'Cache-Control': 'public, max-age=604800'
+              });
+            }
+            const errBody = await gRes.text().catch(() => '');
+            return jsonResponse({ error: `gRes not ok: ${gRes.status}`, errBody }, 502);
+          } catch (err) {
+            return jsonResponse({ error: `fetch failed: ${err.message}` }, 500);
+          }
+        }
+
         if (pathname === '/api/artist-image') {
           const artist = url.searchParams.get('artist') || '';
+          const provider = (url.searchParams.get('provider') || 'auto').toLowerCase();
+          const fallback = url.searchParams.get('fallback') !== 'false';
           if (!artist) {
             return jsonResponse({ imageUrl: null });
           }
 
-          const cacheKey = `artist_img_v3_${artist.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+          const cacheKey = `artist_img_v4_${provider}_${fallback ? 'fb' : 'nofb'}_${artist.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
           const cached = await redisGet(env, cacheKey);
           if (cached) {
             return jsonResponse({ imageUrl: cached === '__not_found__' ? null : cached }, 200, {
@@ -216,7 +280,7 @@ export default {
             });
           }
 
-          const foundImage = await fetchArtistImage(artist, env);
+          const foundImage = await fetchArtistImage(artist, env, provider, fallback);
           if (foundImage) {
             await redisSet(env, cacheKey, foundImage, 1209600);
           } else {
