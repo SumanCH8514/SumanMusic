@@ -1,0 +1,31 @@
+# Standard Crawler Directives
+User-agent: *
+Allow: /
+Allow: /app
+Disallow: /app/admin-panel
+
+# AI Crawler Protections (Standard Compliant)
+# These blocks prevent major AI models from scraping your content for training.
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+Sitemap: https://songs.sumanonline.com/sitemap.xml

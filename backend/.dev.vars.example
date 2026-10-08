@@ -1,0 +1,21 @@
+# ============================================
+# SumanMusic — Backend (Cloudflare Worker) Secrets
+# ============================================
+# Copy this file to `.dev.vars` and fill in your values.
+# cp .dev.vars.example .dev.vars
+#
+# For production, set these as Secrets in the Cloudflare Dashboard:
+# Workers & Pages → sumanmusic-backend → Settings → Variables and Secrets
+
+# Google Drive API Keys (comma-separated for rotation)
+GDRIVE_API_KEYS="YOUR_GDRIVE_KEY_1,YOUR_GDRIVE_KEY_2"
+
+# Google Drive Folder ID containing your music files
+GDRIVE_FOLDER_ID="YOUR_GDRIVE_FOLDER_ID"
+
+# YouTube Data API v3 Keys (comma-separated for rotation)
+YOUTUBE_API_KEYS="YOUR_YOUTUBE_KEY_1,YOUR_YOUTUBE_KEY_2"
+
+# Upstash Redis REST API (for server-side caching)
+UPSTASH_REDIS_REST_URL="https://your-instance.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="your_upstash_redis_rest_token"

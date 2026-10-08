@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sumanmusic-backend",
+  "main": "src/index.js",
+  "compatibility_date": "2025-02-04",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "api.backend.songs.sumanonline.com",
+      "custom_domain": true
+    }
+  ],
+  // All secrets are loaded from .dev.vars (local) or Cloudflare Dashboard Secrets (production).
+  // See .dev.vars_example for the required variables.
+  "vars": {},
+  "observability": {
+    "enabled": true
+  }
+}

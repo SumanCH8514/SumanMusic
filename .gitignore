@@ -1,0 +1,87 @@
+# ========================
+# Logs
+# ========================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ========================
+# Dependencies
+# ========================
+node_modules
+**/node_modules
+
+# ========================
+# Environment / Secrets (CRITICAL - never commit)
+# ========================
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+.dev.vars
+**/.dev.vars
+backend/.dev.vars
+
+# ========================
+# Build Output
+# ========================
+dist
+dist-ssr
+**/dist
+frontend/dist
+*.local
+
+# ========================
+# Firebase
+# ========================
+.firebase
+.firebaserc
+firebase-debug.log*
+firestore-debug.log*
+
+# ========================
+# Cloudflare / Wrangler
+# ========================
+.wrangler
+**/.wrangler
+backend/.wrangler
+
+# ========================
+# IDE & OS
+# ========================
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+
+# ========================
+# Project-specific ignores
+# ========================
+# PHP redirect shim (hosting artifact)
+index.php
+**/index.php
+
+# Knowledge graph output (auto-generated)
+graphify-out/
+.graphify*
+
+# Scratch / temp working files
+scratch/
+
+# Analysis artifacts (may contain project metadata)
+PROJECT_ANALYSIS.md
+
+# Agent configuration (not needed in public repo)
+.agents/
