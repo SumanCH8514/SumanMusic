@@ -150,12 +150,14 @@ export default {
         if (pathname === '/api/metadata') {
           const artist = url.searchParams.get('artist') || '';
           const title = url.searchParams.get('title') || '';
+          const provider = (url.searchParams.get('provider') || 'auto').toLowerCase();
+          const fallback = url.searchParams.get('fallback') !== 'false';
 
           if (!artist || !title) {
             return jsonResponse(null);
           }
 
-          const cacheKey = `meta_v3_${artist}_${title}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const cacheKey = `meta_v4_${provider}_${fallback ? 'fb' : 'nofb'}_${artist}_${title}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
           const cached = await redisGet(env, cacheKey);
           if (cached) {
             return jsonResponse(cached, 200, {
@@ -164,7 +166,7 @@ export default {
             });
           }
 
-          const metadata = await fetchMetadata(artist, title);
+          const metadata = await fetchMetadata(artist, title, env, provider, fallback);
           if (metadata) {
             await redisSet(env, cacheKey, metadata, 604800);
           }

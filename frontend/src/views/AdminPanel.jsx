@@ -3,13 +3,45 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayer } from '../context/usePlayer';
 import { useGDrive } from '../context/GDriveContext';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Users, Music, Database, Activity, ShieldAlert, Settings, ArrowLeft, RefreshCw, Trash2, Shield, Loader2, X } from 'lucide-react';
+import { Users, Music, Database, Activity, ShieldAlert, Settings, ArrowLeft, RefreshCw, Trash2, Shield, Loader2, X, Globe, Disc3, CheckCircle2, Sparkles } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { cn } from '../lib/utils';
 import { useToast } from '../context/ToastContext';
 import { useSettings } from '../context/SettingsContext';
-import { Globe } from 'lucide-react';
+
+const METADATA_PROVIDERS = [
+  {
+    id: 'auto',
+    name: 'Smart Auto (Cascade)',
+    badge: 'Recommended',
+    description: 'Sequentially queries Apple Music → JioSaavn → Last.fm → Deezer for optimal coverage.'
+  },
+  {
+    id: 'jiosaavn',
+    name: 'JioSaavn',
+    badge: 'Indian & Bollywood',
+    description: 'Highest match accuracy for Bollywood, Hindi, Punjabi, Bengali & Indian regional music.'
+  },
+  {
+    id: 'apple',
+    name: 'Apple Music / iTunes',
+    badge: '600px Hi-Res Art',
+    description: 'Crisp, high-definition artwork and best results for Western pop, hip-hop & international hits.'
+  },
+  {
+    id: 'lastfm',
+    name: 'Last.fm',
+    badge: 'Community Scrobbles',
+    description: 'Rich community tags, extensive artist discographies, and global scrobbler catalog.'
+  },
+  {
+    id: 'deezer',
+    name: 'Deezer',
+    badge: 'Global Streaming',
+    description: 'Extensive worldwide streaming database with high-resolution square album covers.'
+  }
+];
 
 const AdminCard = ({ icon: Icon, title, description, count, color, isLoading, onClick }) => (
   <div 
@@ -69,8 +101,25 @@ const AdminPanel = () => {
     isVoiceSearchEnabled,
     updateVoiceSearchEnabled,
     onlineLibraryAccess, 
-    updateOnlineLibraryAccess 
+    updateOnlineLibraryAccess,
+    metadataProvider,
+    metadataFallback,
+    updateMetadataProvider,
+    updateMetadataFallback,
+    clearMetadataCache
   } = useSettings();
+  const [isClearingMetaCache, setIsClearingMetaCache] = useState(false);
+
+  const handleClearMetadataCache = () => {
+    setIsClearingMetaCache(true);
+    clearMetadataCache();
+    showToast('Metadata cache purged! Current engine will re-resolve covers.');
+    setSyncMessage('Metadata cache purged!');
+    setTimeout(() => {
+      setIsClearingMetaCache(false);
+      setSyncMessage('');
+    }, 2500);
+  };
 
   useEffect(() => {
     if (keys) setLocalKeys(keys);
@@ -418,6 +467,118 @@ const AdminPanel = () => {
               </div>
             </div>
 
+        </div>
+
+        {/* Metadata Engine & Provider Selection */}
+        <div className="mt-8 md:mt-12 space-y-4 md:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30">
+                <Disc3 className="w-5 h-5 md:w-6 md:h-6 animate-[spin_8s_linear_infinite]" />
+              </div>
+              Metadata Provider Engine
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-zinc-400">Current Active:</span>
+              <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                {METADATA_PROVIDERS.find(p => p.id === (metadataProvider || 'auto'))?.name || 'Smart Auto'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 backdrop-blur-md rounded-[1.5rem] md:rounded-3xl p-4 md:p-8 border border-white/10 space-y-6">
+            <div>
+              <p className="text-sm font-bold text-white">Choose Primary Metadata Source</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Select which catalog engine is queried first for song titles, album artwork, and genres.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+              {METADATA_PROVIDERS.map((provider) => {
+                const isSelected = (metadataProvider || 'auto') === provider.id;
+                return (
+                  <div
+                    key={provider.id}
+                    onClick={() => {
+                      updateMetadataProvider(provider.id);
+                      showToast(`Primary metadata provider set to ${provider.name}`);
+                    }}
+                    className={cn(
+                      "relative p-4 md:p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group",
+                      isSelected
+                        ? "bg-gradient-to-br from-emerald-500/10 to-teal-500/5 border-emerald-500/50 shadow-lg shadow-emerald-500/10"
+                        : "bg-black/30 border-white/5 hover:border-white/20 hover:bg-white/5"
+                    )}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider",
+                          isSelected ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/10 text-zinc-400"
+                        )}>
+                          {provider.badge}
+                        </span>
+                        {isSelected && (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 animate-in zoom-in-50" />
+                        )}
+                      </div>
+                      <h4 className="font-bold text-white text-base group-hover:text-emerald-300 transition-colors">
+                        {provider.name}
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                        {provider.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold">
+                      <span className={isSelected ? "text-emerald-400" : "text-zinc-500"}>
+                        {isSelected ? "● Active Primary" : "Click to Activate"}
+                      </span>
+                      <span className="text-zinc-500 font-mono text-[10px]">{provider.id}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+              {/* Fallback Toggle */}
+              <div className="flex items-center justify-between p-4 bg-black/40 border border-white/10 rounded-2xl">
+                <div className="pr-4">
+                  <p className="text-sm font-bold text-white leading-tight">Multi-tier Auto Fallback</p>
+                  <p className="text-[10px] text-zinc-400 mt-1">If the selected engine returns no artwork or song match, fallback to remaining engines</p>
+                </div>
+                <button
+                  onClick={() => updateMetadataFallback(!metadataFallback)}
+                  className={cn(
+                    "relative w-11 h-6 rounded-full transition-all duration-300 focus:outline-none flex-shrink-0",
+                    metadataFallback ? "bg-emerald-500 shadow-lg shadow-emerald-500/20" : "bg-zinc-700"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 left-1 w-4 h-4 rounded-full transition-all duration-300",
+                    metadataFallback ? "translate-x-5 bg-white" : "translate-x-0 bg-zinc-400"
+                  )} />
+                </button>
+              </div>
+
+              {/* Cache Purge */}
+              <div className="flex items-center justify-between p-4 bg-black/40 border border-white/10 rounded-2xl">
+                <div className="pr-4">
+                  <p className="text-sm font-bold text-white leading-tight">Purge Metadata Cache</p>
+                  <p className="text-[10px] text-zinc-400 mt-1">Clear cached covers and track tags to force re-enrichment with current engine</p>
+                </div>
+                <button
+                  onClick={handleClearMetadataCache}
+                  disabled={isClearingMetaCache}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-2 transition-all active:scale-95 shrink-0"
+                >
+                  {isClearingMetaCache ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  Purge Cache
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

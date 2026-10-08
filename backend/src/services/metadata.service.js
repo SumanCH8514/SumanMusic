@@ -203,22 +203,44 @@ async function fetchFromDeezer(artist, title) {
   return null;
 }
 
-async function fetchSinglePass(artist, title) {
-  const appleResult = await fetchFromAppleMusic(artist, title);
-  if (appleResult && appleResult.title && appleResult.cover) {
-    return appleResult;
-  }
+async function fetchFromLastFM(artist, title, env = {}) {
+  const apiKey = env?.LASTFM_API_KEY;
+  if (!apiKey || !title) return null;
 
-  const jioSaavnResult = await fetchFromJioSaavn(artist, title);
-  if (jioSaavnResult && jioSaavnResult.title && jioSaavnResult.cover) {
-    return jioSaavnResult;
-  }
+  try {
+    const url = `https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${apiKey}&artist=${encodeURIComponent(artist || '')}&track=${encodeURIComponent(title)}&format=json`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.track) {
+        const track = data.track;
+        const images = track.album?.image;
+        let cover = null;
+        if (Array.isArray(images) && images.length > 0) {
+          cover = images[images.length - 1]?.['#text'] || images[0]?.['#text'];
+        }
+        if (cover && cover.includes('2a96cbd8b46e442fc41c2b86b821562f')) {
+          cover = null;
+        }
 
-  const deezerResult = await fetchFromDeezer(artist, title);
-  if (deezerResult && deezerResult.title && deezerResult.cover) {
-    return deezerResult;
-  }
+        return {
+          title: decodeHtml(track.name || title),
+          artist: decodeHtml(track.artist?.name || artist),
+          album: decodeHtml(track.album?.title || null),
+          cover: cover,
+          thumbnail: cover,
+          genre: track.toptags?.tag?.[0]?.name || 'Music',
+          year: null,
+          provider: 'Last.fm'
+        };
+      }
+    }
+  } catch {}
 
+  return null;
+}
+
+async function fetchFromAudioDb(artist, title) {
   try {
     const audioDbUrl = `https://www.theaudiodb.com/api/v1/json/2/searchtrack.php?s=${encodeURIComponent(artist)}&t=${encodeURIComponent(title)}`;
     const response = await fetch(audioDbUrl);
@@ -241,27 +263,70 @@ async function fetchSinglePass(artist, title) {
       }
     }
   } catch {}
-
-  if (appleResult) return appleResult;
-  if (jioSaavnResult) return jioSaavnResult;
-  if (deezerResult) return deezerResult;
-
   return null;
 }
 
-export async function fetchMetadata(artist, title) {
-  let result = await fetchSinglePass(artist, title);
+async function fetchSinglePass(artist, title, env = {}, preferredProvider = 'auto', enableFallback = true) {
+  const providerFetchers = {
+    apple: () => fetchFromAppleMusic(artist, title),
+    jiosaavn: () => fetchFromJioSaavn(artist, title),
+    lastfm: () => fetchFromLastFM(artist, title, env),
+    deezer: () => fetchFromDeezer(artist, title),
+    theaudiodb: () => fetchFromAudioDb(artist, title)
+  };
+
+  const defaultOrder = ['apple', 'jiosaavn', 'lastfm', 'deezer', 'theaudiodb'];
+  let runOrder = [];
+
+  const normPreferred = (preferredProvider || 'auto').toLowerCase();
+  if (normPreferred !== 'auto' && providerFetchers[normPreferred]) {
+    runOrder = [normPreferred];
+    if (enableFallback) {
+      runOrder = runOrder.concat(defaultOrder.filter(p => p !== normPreferred));
+    }
+  } else {
+    runOrder = defaultOrder;
+  }
+
+  let bestWithoutCover = null;
+
+  for (const providerKey of runOrder) {
+    const fetcher = providerFetchers[providerKey];
+    if (!fetcher) continue;
+    try {
+      const res = await fetcher();
+      if (res && res.title) {
+        if (res.cover) {
+          return res;
+        }
+        if (!bestWithoutCover) {
+          bestWithoutCover = res;
+        }
+      }
+    } catch {}
+
+    // If fallback is disabled and we just tested the preferred provider, stop here
+    if (!enableFallback && normPreferred !== 'auto') {
+      break;
+    }
+  }
+
+  return bestWithoutCover;
+}
+
+export async function fetchMetadata(artist, title, env = {}, preferredProvider = 'auto', enableFallback = true) {
+  let result = await fetchSinglePass(artist, title, env, preferredProvider, enableFallback);
   if (result && result.cover) return result;
 
-  if (artist && title && artist !== "Unknown Artist") {
-    const swappedResult = await fetchSinglePass(title, artist);
+  if (enableFallback && artist && title && artist !== "Unknown Artist") {
+    const swappedResult = await fetchSinglePass(title, artist, env, preferredProvider, enableFallback);
     if (swappedResult && swappedResult.cover) {
       return swappedResult;
     }
   }
 
-  if (title) {
-    const titleOnlyResult = await fetchSinglePass('', title);
+  if (enableFallback && title) {
+    const titleOnlyResult = await fetchSinglePass('', title, env, preferredProvider, enableFallback);
     if (titleOnlyResult && titleOnlyResult.cover) {
       return titleOnlyResult;
     }
