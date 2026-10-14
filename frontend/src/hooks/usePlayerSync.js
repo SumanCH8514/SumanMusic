@@ -19,11 +19,16 @@ export const usePlayerSync = ({
 }) => {
     const prevUserUid = useRef(user?.uid);
     const lastSavedTimeRef = useRef(0);
+    const likedSongsRef = useRef(likedSongs);
+    useEffect(() => {
+        likedSongsRef.current = likedSongs;
+    }, [likedSongs]);
+    const userUid = user?.uid;
 
     useEffect(() => {
-        if (!user || isGuest) return;
+        if (!userUid || isGuest) return;
 
-        const userRef = doc(db, 'users', user.uid);
+        const userRef = doc(db, 'users', userUid);
         
         const syncInitial = async () => {
             try {
@@ -35,7 +40,7 @@ export const usePlayerSync = ({
                     );
                 }
 
-                const merged = Array.from(new Set([...cloudLikedIds, ...likedSongs]));
+                const merged = Array.from(new Set([...cloudLikedIds, ...likedSongsRef.current]));
                 
                 if (merged.length > cloudLikedIds.length) {
                     await setDoc(userRef, { likedSongs: merged }, { merge: true });
@@ -61,7 +66,7 @@ export const usePlayerSync = ({
         });
 
         return () => unsubscribe();
-    }, [user?.uid, isGuest]);
+    }, [userUid, isGuest, setLikedSongs]);
 
     useEffect(() => {
         localStorage.setItem('suman_music_liked', JSON.stringify(likedSongs));

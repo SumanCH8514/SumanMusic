@@ -63,12 +63,13 @@ const AudioStudioModal = memo(({
   setSoundBoost
 }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
-
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setActiveTab(initialTab);
     }
-  }, [isOpen, initialTab]);
+  }
 
   if (!isOpen) return null;
 
@@ -558,7 +559,7 @@ const LyricLine = memo(({ text, isActive, onClick }) => {
 const LyricsPanel = memo(({
   isLyricsLoading, lyrics, activeIndex, lyricsContainerRef, handleLyricsScroll,
   seek, duration, activeSong, setIsAutoScrollEnabled, isExpanded, onToggle,
-  subTab, setSubTab
+  subTab, setSubTab, lyricsOffset = 0
 }) => {
   const { currentTime } = usePlayerProgress();
   return (
@@ -1060,7 +1061,8 @@ const DesktopLyricsTab = memo(({
   lyrics, isLyricsLoading, duration, seek, isAutoScrollEnabled, setIsAutoScrollEnabled,
   currentSong, lyricsOffset, onChangeOffset, lyricsSource, onChangeSource,
   onReloadLyrics, isLyricsReloading, isTranslating, isTranslationLoading,
-  translations, onToggleTranslation, lyricsStyle = 'rhythmic', onChangeStyle
+  translations, onToggleTranslation, translationMode = 'en', onChangeTranslationMode,
+  lyricsStyle = 'rhythmic', onChangeStyle
 }) => {
   const { currentTime } = usePlayerProgress();
   const lyricsContainerRef = useRef(null);
@@ -1127,11 +1129,13 @@ const DesktopLyricsTab = memo(({
               currentSong={currentSong}
               currentSource={lyricsSource}
               currentStyle={lyricsStyle}
+              currentTranslationMode={translationMode}
               offset={lyricsOffset}
               isTranslating={isTranslating}
               isTranslationLoading={isTranslationLoading}
               isReloading={isLyricsReloading}
               onToggleTranslation={onToggleTranslation}
+              onChangeTranslationMode={onChangeTranslationMode}
               onChangeOffset={onChangeOffset}
               onChangeSource={onChangeSource}
               onChangeStyle={onChangeStyle}
@@ -1265,7 +1269,6 @@ const MusicPlayer = () => {
     setEqualizerPreset,
     crossfade,
     setCrossfade,
-    getFrequencyData,
     isShuffle,
     setIsShuffle,
     repeatMode,
@@ -1288,13 +1291,12 @@ const MusicPlayer = () => {
   const [prevVolume, setPrevVolume] = useState(1.0);
   const [isAudioStudioOpen, setIsAudioStudioOpen] = useState(false);
   const [audioStudioTab, setAudioStudioTab] = useState('eq');
-  const [offlineProgress, setOfflineProgress] = useState(null);
+  const [, setOfflineProgress] = useState(null);
   const { playlists, createPlaylist, addSongToPlaylist } = usePlaylists();
   const [isPlaylistPickerOpen, setIsPlaylistPickerOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showNewPlaylistInput, setShowNewPlaylistInput] = useState(false);
   const [isTabCollapsed, setIsTabCollapsed] = useState(true);
-  const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [lyricsSubTab, setLyricsSubTab] = useState('lyrics');
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
   const [hoverTime, setHoverTime] = useState(null);
@@ -1307,6 +1309,14 @@ const MusicPlayer = () => {
   const [lyricsSource, setLyricsSource] = useState('auto');
   const [isTranslating, setIsTranslating] = useState(false);
   const [isTranslationLoading, setIsTranslationLoading] = useState(false);
+  const [translationMode, setTranslationMode] = useState(() => {
+    try {
+      return localStorage.getItem('sumanmusic_translation_mode') || 'en';
+    } catch {
+      return 'en';
+    }
+  });
+  const [translationsCache, setTranslationsCache] = useState({});
   const [translations, setTranslations] = useState([]);
   const [isLyricsReloading, setIsLyricsReloading] = useState(false);
   const [customLyrics, setCustomLyrics] = useState(null);
@@ -1343,24 +1353,56 @@ const MusicPlayer = () => {
     }
   }, [currentSong?.id]);
 
+  const loadTranslationsForMode = useCallback(async (mode, targetLyrics) => {
+    const linesToTranslate = targetLyrics || activeLyrics;
+    if (!linesToTranslate || linesToTranslate.length === 0) return;
+    const songId = currentSong?.id || currentSong?.title || 'active';
+    const songKey = `${songId}_${mode}`;
+    if (translationsCache[songKey]) {
+      setTranslations(translationsCache[songKey]);
+      return;
+    }
+    setIsTranslationLoading(true);
+    try {
+      const targetLang = mode === 'rom' ? 'en' : mode;
+      const transResult = await fetchTranslations(linesToTranslate, targetLang, mode);
+      const activeList = mode === 'rom' ? transResult.romanized : transResult.translations;
+      const finalTrans = activeList && activeList.length > 0 ? activeList : transResult;
+      setTranslationsCache((prev) => ({
+        ...prev,
+        [songKey]: finalTrans,
+        [`${songId}_rom`]: transResult.romanized,
+        [`${songId}_${targetLang}`]: transResult.translations
+      }));
+      setTranslations(finalTrans);
+    } catch {
+      showToast("Failed to load translations", "error");
+    } finally {
+      setIsTranslationLoading(false);
+    }
+  }, [activeLyrics, currentSong?.id, currentSong?.title, showToast, translationsCache]);
+
   const handleToggleTranslation = useCallback(async () => {
     if (isTranslating) {
       setIsTranslating(false);
       return;
     }
     setIsTranslating(true);
-    if (translations.length === 0 && activeLyrics?.length > 0) {
-      setIsTranslationLoading(true);
-      try {
-        const trans = await fetchTranslations(activeLyrics);
-        setTranslations(trans);
-      } catch {
-        showToast("Failed to load translations", "error");
-      } finally {
-        setIsTranslationLoading(false);
-      }
+    await loadTranslationsForMode(translationMode);
+  }, [isTranslating, loadTranslationsForMode, translationMode]);
+
+  const handleChangeTranslationMode = useCallback(async (newMode) => {
+    if (newMode === 'off') {
+      setIsTranslating(false);
+      return;
     }
-  }, [isTranslating, translations.length, activeLyrics, showToast]);
+    setTranslationMode(newMode);
+    try {
+      localStorage.setItem('sumanmusic_translation_mode', newMode);
+    } catch {}
+    setIsTranslating(true);
+    await loadTranslationsForMode(newMode);
+  }, [loadTranslationsForMode]);
 
   const handleChangeSource = useCallback(async (newSource) => {
     setLyricsSource(newSource);
@@ -1370,6 +1412,9 @@ const MusicPlayer = () => {
       if (data?.lines?.length > 0) {
         setCustomLyrics(data.lines);
         setTranslations([]);
+        if (isTranslating) {
+          loadTranslationsForMode(translationMode, data.lines);
+        }
         showToast(`Switched lyrics to ${newSource}`, "success");
       } else {
         showToast(`No lyrics found from ${newSource}`, "info");
@@ -1379,7 +1424,7 @@ const MusicPlayer = () => {
     } finally {
       setIsLyricsReloading(false);
     }
-  }, [currentSong, showToast]);
+  }, [currentSong, isTranslating, loadTranslationsForMode, showToast, translationMode]);
 
   const handleReloadLyrics = useCallback(async () => {
     setIsLyricsReloading(true);
@@ -1388,6 +1433,9 @@ const MusicPlayer = () => {
       if (data?.lines?.length > 0) {
         setCustomLyrics(data.lines);
         setTranslations([]);
+        if (isTranslating) {
+          loadTranslationsForMode(translationMode, data.lines);
+        }
         showToast("Lyrics reloaded", "success");
       } else {
         showToast("No lyrics found", "info");
@@ -1397,7 +1445,7 @@ const MusicPlayer = () => {
     } finally {
       setIsLyricsReloading(false);
     }
-  }, [currentSong, lyricsSource, showToast]);
+  }, [currentSong, isTranslating, loadTranslationsForMode, lyricsSource, showToast, translationMode]);
 
   const relatedSongs = useMemo(() => {
     if (!currentSong || !songs) return [];
@@ -1999,11 +2047,13 @@ const MusicPlayer = () => {
                                     currentSong={currentSong}
                                     currentSource={lyricsSource}
                                     currentStyle={lyricsStyle}
+                                    currentTranslationMode={translationMode}
                                     offset={lyricsOffset}
                                     isTranslating={isTranslating}
                                     isTranslationLoading={isTranslationLoading}
                                     isReloading={isLyricsReloading}
                                     onToggleTranslation={handleToggleTranslation}
+                                    onChangeTranslationMode={handleChangeTranslationMode}
                                     onChangeOffset={handleChangeOffset}
                                     onChangeSource={handleChangeSource}
                                     onChangeStyle={handleChangeStyle}
@@ -2315,6 +2365,8 @@ const MusicPlayer = () => {
                             isTranslationLoading={isTranslationLoading}
                             translations={translations}
                             onToggleTranslation={handleToggleTranslation}
+                            translationMode={translationMode}
+                            onChangeTranslationMode={handleChangeTranslationMode}
                             lyricsStyle={lyricsStyle}
                             onChangeStyle={handleChangeStyle}
                           />

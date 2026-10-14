@@ -224,6 +224,7 @@ const Library = () => {
   }, []);
 
   const offlineTracks = useMemo(() => {
+    void offlineUpdatedVersion;
     return activeFilter === 'Offline' ? getOfflineTracks() : [];
   }, [activeFilter, offlineUpdatedVersion]);
 

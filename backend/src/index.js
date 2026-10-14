@@ -210,10 +210,12 @@ export default {
 
         if (pathname === '/api/translate') {
           let lines = [];
+          let mode = 'translation';
           if (request.method === 'POST') {
             try {
               const body = await request.json();
               lines = Array.isArray(body.lines) ? body.lines : [];
+              if (body.mode) mode = body.mode;
             } catch {}
           } else {
             const q = url.searchParams.get('q');
@@ -222,45 +224,148 @@ export default {
 
           const target = url.searchParams.get('target') || 'en';
           if (!lines || lines.length === 0) {
-            return jsonResponse({ translations: [] }, 200);
+            return jsonResponse({ translations: [], romanized: [] }, 200);
           }
 
-          const joinedText = lines.join('\n');
-          const hash = Array.from(joinedText.slice(0, 50)).reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) >>> 0, 0);
-          const cacheKey = `trans_${target}_${hash}_${lines.length}`;
+          const validItems = [];
+          for (let i = 0; i < lines.length; i++) {
+            const text = (typeof lines[i] === 'string' ? lines[i] : lines[i]?.text || '').trim();
+            if (text && !lines[i]?.isCountdown) {
+              validItems.push({ originalIndex: i, text });
+            }
+          }
+
+          if (validItems.length === 0) {
+            return jsonResponse({ translations: new Array(lines.length).fill(''), romanized: new Array(lines.length).fill('') }, 200);
+          }
+
+          const joinedSignature = validItems.map(item => item.text).join('|');
+          const hash = Array.from(joinedSignature.slice(0, 100)).reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) >>> 0, 0);
+          const cacheKey = `trans_v2_${target}_${hash}_${validItems.length}`;
 
           const cached = await redisGet(env, cacheKey);
-          if (cached && Array.isArray(cached)) {
-            return jsonResponse({ translations: cached }, 200, {
+          if (cached && typeof cached === 'object' && Array.isArray(cached.translations)) {
+            return jsonResponse(cached, 200, {
               'X-Cache': 'HIT-REDIS',
               'Cache-Control': 'public, max-age=604800'
             });
           }
 
-          try {
-            const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(joinedText)}`;
-            const gRes = await fetch(gUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*'
-              }
-            });
-            if (gRes.ok) {
-              const gData = await gRes.json();
-              const translatedFull = Array.isArray(gData[0]) ? gData[0].map(x => x[0]).join('') : '';
-              const translatedLines = translatedFull.split('\n');
-              const finalTranslations = lines.map((_, i) => translatedLines[i] || '');
-              await redisSet(env, cacheKey, finalTranslations, 604800);
-              return jsonResponse({ translations: finalTranslations }, 200, {
-                'X-Cache': 'MISS',
-                'Cache-Control': 'public, max-age=604800'
-              });
+          const chunkArray = (arr, size) => {
+            const res = [];
+            for (let i = 0; i < arr.length; i += size) res.push(arr.slice(i, i + size));
+            return res;
+          };
+
+          const chunks = chunkArray(validItems, 25);
+          const translationsMap = {};
+          const romanizedMap = {};
+          let detectedSourceLang = null;
+
+          for (const chunk of chunks) {
+            const numberedText = chunk.map((item, idx) => `${idx}___ ${item.text}`).join('\n');
+            const clients = ['dict-chrome-ex', 'at'];
+            let chunkSuccess = false;
+
+            for (const clientName of clients) {
+              try {
+                const gUrl = `https://translate.googleapis.com/translate_a/single?client=${clientName}&sl=auto&tl=${encodeURIComponent(target)}&dt=t&dt=rm`;
+                const gRes = await fetch(gUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                  },
+                  body: `q=${encodeURIComponent(numberedText)}`
+                });
+
+                if (gRes.ok) {
+                  const gData = await gRes.json();
+                  if (gData && Array.isArray(gData[0])) {
+                    if (gData[2]) detectedSourceLang = gData[2];
+                    const fullTrans = gData[0].map(x => x[0]).filter(Boolean).join('');
+                    const fullRoman = gData[0].map(x => x[3]).filter(Boolean).join('');
+
+                    const transLines = fullTrans.split('\n');
+                    for (const tLine of transLines) {
+                      const match = tLine.match(/^\s*(\d+)___\s*(.*)$/);
+                      if (match) {
+                        const localIdx = parseInt(match[1], 10);
+                        if (chunk[localIdx]) {
+                          translationsMap[chunk[localIdx].originalIndex] = match[2].trim();
+                        }
+                      }
+                    }
+
+                    const romanLines = fullRoman.split('\n');
+                    for (const rLine of romanLines) {
+                      const match = rLine.match(/^\s*(\d+)___\s*(.*)$/);
+                      if (match) {
+                        const localIdx = parseInt(match[1], 10);
+                        if (chunk[localIdx]) {
+                          romanizedMap[chunk[localIdx].originalIndex] = match[2].trim();
+                        }
+                      }
+                    }
+
+                    chunk.forEach((item, localIdx) => {
+                      if (!translationsMap[item.originalIndex] && transLines[localIdx]) {
+                        translationsMap[item.originalIndex] = transLines[localIdx].replace(/^\s*\d+___\s*/, '').trim();
+                      }
+                      if (!romanizedMap[item.originalIndex] && romanLines[localIdx]) {
+                        romanizedMap[item.originalIndex] = romanLines[localIdx].replace(/^\s*\d+___\s*/, '').trim();
+                      }
+                    });
+
+                    chunkSuccess = true;
+                    break;
+                  }
+                }
+              } catch {}
             }
-            const errBody = await gRes.text().catch(() => '');
-            return jsonResponse({ error: `gRes not ok: ${gRes.status}`, errBody }, 502);
-          } catch (err) {
-            return jsonResponse({ error: `fetch failed: ${err.message}` }, 500);
+
+            if (!chunkSuccess) {
+              try {
+                for (const item of chunk) {
+                  const sUrl = `https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=${encodeURIComponent(target)}&dt=t&dt=rm&q=${encodeURIComponent(item.text)}`;
+                  const sRes = await fetch(sUrl);
+                  if (sRes.ok) {
+                    const sData = await sRes.json();
+                    if (sData?.[0]?.[0]?.[0]) {
+                      translationsMap[item.originalIndex] = sData[0][0][0].trim();
+                    }
+                    if (sData?.[0]?.[1]?.[3]) {
+                      romanizedMap[item.originalIndex] = sData[0][1][3].trim();
+                    }
+                    if (sData?.[2]) detectedSourceLang = sData[2];
+                  }
+                }
+              } catch {}
+            }
           }
+
+          const finalTranslations = new Array(lines.length).fill('');
+          const finalRomanized = new Array(lines.length).fill('');
+
+          for (let i = 0; i < lines.length; i++) {
+            finalTranslations[i] = translationsMap[i] || '';
+            finalRomanized[i] = romanizedMap[i] || '';
+          }
+
+          const payload = {
+            translations: finalTranslations,
+            romanized: finalRomanized,
+            detectedLang: detectedSourceLang || 'auto'
+          };
+
+          if (Object.keys(translationsMap).length > 0) {
+            await redisSet(env, cacheKey, payload, 604800);
+          }
+
+          return jsonResponse(payload, 200, {
+            'X-Cache': 'MISS',
+            'Cache-Control': 'public, max-age=604800'
+          });
         }
 
         if (pathname === '/api/artist-image') {

@@ -7,11 +7,13 @@ export const LyricsFloatingMenu = memo(({
   _currentSong,
   currentSource = 'binilyrics',
   currentStyle = 'rhythmic',
+  currentTranslationMode = 'en',
   offset = 0,
   isTranslating = false,
   isTranslationLoading = false,
   isReloading = false,
   onToggleTranslation,
+  onChangeTranslationMode,
   onChangeOffset,
   onChangeSource,
   onChangeStyle,
@@ -97,6 +99,48 @@ export const LyricsFloatingMenu = memo(({
   ];
 
   const currentStyleLabel = styles.find((s) => s.id === currentStyle)?.label || 'Rhythmic Pulsing';
+
+  const translationModes = [
+    {
+      id: 'en',
+      label: 'English Translation',
+      badge: 'ENGLISH',
+      badgeStyle: 'bg-primary/20 text-primary border-primary/30',
+      desc: 'Line-by-line meaning in English'
+    },
+    {
+      id: 'rom',
+      label: 'Romanized (Sing-Along)',
+      badge: 'PHONETIC',
+      badgeStyle: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+      desc: 'Phonetic English alphabet pronunciation'
+    },
+    {
+      id: 'hi',
+      label: 'Hindi Translation (हिन्दी)',
+      badge: 'HINDI',
+      badgeStyle: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+      desc: 'Translate lyrics into Hindi'
+    },
+    {
+      id: 'es',
+      label: 'Spanish Translation (Español)',
+      badge: 'SPANISH',
+      badgeStyle: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+      desc: 'Translate lyrics into Spanish'
+    },
+    {
+      id: 'off',
+      label: 'Turn Off Translation',
+      badge: 'OFF',
+      badgeStyle: 'bg-white/10 text-white/50 border-white/15',
+      desc: 'Hide translated subtitles'
+    }
+  ];
+
+  const currentTranslationLabel = isTranslating
+    ? (translationModes.find((t) => t.id === currentTranslationMode)?.label || 'English Translation')
+    : 'Off';
 
   return (
     <div ref={menuRef} className={cn("relative flex items-center gap-2 select-none", className)}>
@@ -272,6 +316,60 @@ export const LyricsFloatingMenu = memo(({
                   })}
                 </div>
               </div>
+            ) : activeSubmenu === 'translation' ? (
+              <div className="p-1 space-y-1">
+                <div className="flex items-center justify-between pb-2 mb-1 border-b border-white/10 px-1">
+                  <button
+                    onClick={() => setActiveSubmenu(null)}
+                    className="p-1 -ml-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-1 text-xs font-semibold transition-all active:scale-95"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">Lyrics Translation</span>
+                  <div className="w-12" />
+                </div>
+                <div className="space-y-1">
+                  {translationModes.map((t) => {
+                    const isSelected = isTranslating ? currentTranslationMode === t.id : t.id === 'off';
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          onChangeTranslationMode?.(t.id);
+                          setActiveSubmenu(null);
+                          setIsOpen(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-between p-2.5 rounded-xl transition-all text-left group border",
+                          isSelected
+                            ? "bg-white/10 border-white/20 text-white shadow-sm"
+                            : "border-transparent hover:bg-white/[0.06] text-white/80 hover:text-white"
+                        )}
+                      >
+                        <div className="space-y-0.5 pr-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs text-white">{t.label}</span>
+                            {t.badge && (
+                              <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded-md border tracking-wider", t.badgeStyle)}>
+                                {t.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-white/55 leading-tight">{t.desc}</p>
+                        </div>
+                        {isSelected ? (
+                          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                            <Check className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border border-white/15 group-hover:border-white/30 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ) : (
               <div className="p-1 space-y-0.5">
                 <button
@@ -303,6 +401,17 @@ export const LyricsFloatingMenu = memo(({
                   <span className="text-white/80">Lyrics Style</span>
                   <span className="text-white/40 text-[11px] flex items-center gap-1">
                     {currentStyleLabel}
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSubmenu('translation')}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-all text-xs"
+                >
+                  <span className="text-white/80">Lyrics Translation</span>
+                  <span className="text-white/40 text-[11px] flex items-center gap-1">
+                    {currentTranslationLabel}
                     <ChevronRight className="w-3.5 h-3.5" />
                   </span>
                 </button>

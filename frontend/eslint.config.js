@@ -30,7 +30,18 @@ export default defineConfig([
         ignoreRestSiblings: true
       }],
       'no-empty': ['error', { allowEmptyCatch: true }],
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }]
+      'react-refresh/only-export-components': ['warn', {
+        allowConstantExport: true,
+        allowExportNames: [
+          'useAuth',
+          'usePlayer',
+          'usePlayerProgress',
+          'useSettings',
+          'useToast',
+          'PlayerContext',
+          'PlayerProgressContext'
+        ]
+      }]
     },
   },
 ])

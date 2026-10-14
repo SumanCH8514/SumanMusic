@@ -260,7 +260,7 @@ export const PlayerProvider = ({ children }) => {
       setIsLoading(false);
     }
 
-  }, [setSource, activeKey, loadingGDrive, librarySource, personalDriveToken, disconnectPersonalDrive, showToast]);
+  }, [activeKey, loadingGDrive, librarySource, personalDriveToken, disconnectPersonalDrive, showToast]);
 
   const hasRestoredInitialRef = useRef(false);
 
@@ -340,6 +340,16 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [songs, currentSong?.id, currentSong?.url, currentSong?.isYouTube]);
 
+  const currentSongRef = useRef(currentSong);
+  const getAudioInstanceRef = useRef(getAudioInstance);
+  const setSourceRef = useRef(setSource);
+
+  useEffect(() => {
+    currentSongRef.current = currentSong;
+    getAudioInstanceRef.current = getAudioInstance;
+    setSourceRef.current = setSource;
+  }, [currentSong, getAudioInstance, setSource]);
+
   useEffect(() => {
     if (!activeKey) return;
 
@@ -363,12 +373,13 @@ export const PlayerProvider = ({ children }) => {
 
     setSongs(prev => prev.map(updateUrl));
     setQueue(prev => prev.map(updateUrl));
-    if (currentSong) {
-      const updatedCurrent = updateUrl(currentSong);
+    const active = currentSongRef.current;
+    if (active) {
+      const updatedCurrent = updateUrl(active);
       setCurrentSong(updatedCurrent);
-      const audio = getAudioInstance();
+      const audio = getAudioInstanceRef.current?.();
       if (audio && audio.src && audio.src.includes('googleapis.com')) {
-        setSource(updatedCurrent.url, updatedCurrent.isYouTube ? (updatedCurrent.videoId || String(updatedCurrent.id).replace(/^yt_/, '')) : null, updatedCurrent, false);
+        setSourceRef.current(updatedCurrent.url, updatedCurrent.isYouTube ? (updatedCurrent.videoId || String(updatedCurrent.id).replace(/^yt_/, '')) : null, updatedCurrent, false);
       }
     }
 

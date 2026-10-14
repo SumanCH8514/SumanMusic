@@ -174,7 +174,7 @@ export const KaraokeLyricLine = memo(({
         )}
       </div>
 
-      {translationText && (
+      {translationText && translationText.trim().toLowerCase() !== (line?.text || '').trim().toLowerCase() && (
         <p
           className={cn(
             "text-sm md:text-base font-semibold tracking-normal transition-all duration-300 mt-1",
