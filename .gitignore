@@ -1,6 +1,6 @@
-# ========================
-# Logs
-# ========================
+node_modules
+**/node_modules
+
 logs
 *.log
 npm-debug.log*
@@ -9,52 +9,61 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# ========================
-# Dependencies
-# ========================
-node_modules
-**/node_modules
-
-# ========================
-# Environment / Secrets (CRITICAL - never commit)
-# ========================
 .env
 .env.*
-!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 **/.env
 **/.env.*
+!.env.example
 !**/.env.example
+
 .dev.vars
+.dev.vars.*
 **/.dev.vars
+**/.dev.vars.*
 backend/.dev.vars
+!.dev.vars.example
+!**/.dev.vars.example
 
-# ========================
-# Build Output
-# ========================
-dist
-dist-ssr
-**/dist
-frontend/dist
-*.local
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.pkcs12
+*.jks
+id_rsa
+id_rsa*
+id_ed25519
+id_ed25519*
 
-# ========================
-# Firebase
-# ========================
 .firebase
 .firebaserc
+!.firebaserc.example
 firebase-debug.log*
 firestore-debug.log*
+*-service-account*.json
+service-account*.json
+serviceAccountKey*.json
+google-services.json
+GoogleService-Info.plist
 
-# ========================
-# Cloudflare / Wrangler
-# ========================
 .wrangler
 **/.wrangler
 backend/.wrangler
 
-# ========================
-# IDE & OS
-# ========================
+dist
+dist-ssr
+**/dist
+frontend/dist
+build
+out
+*.local
+
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -65,23 +74,14 @@ backend/.wrangler
 *.sln
 *.sw?
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# ========================
-# Project-specific ignores
-# ========================
-# PHP redirect shim (hosting artifact)
 index.php
 **/index.php
 
-# Knowledge graph output (auto-generated)
 graphify-out/
 .graphify*
-
-# Scratch / temp working files
 scratch/
-
-# Analysis artifacts (may contain project metadata)
 PROJECT_ANALYSIS.md
-
-# Agent configuration (not needed in public repo)
 .agents/

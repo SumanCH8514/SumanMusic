@@ -1,10 +1,5 @@
 import { useEffect, useRef } from 'react';
 
-/**
- * Hook to trigger metadata enrichment when a component enters the viewport.
- * @param {Object} song - The song object to enrich.
- * @param {Function} enrichMetadata - The enrichment function from usePlayerMetadata.
- */
 export const useInViewEnrichment = (song, enrichMetadata) => {
     const observerRef = useRef(null);
     const elementRef = useRef(null);
@@ -25,7 +20,7 @@ export const useInViewEnrichment = (song, enrichMetadata) => {
             });
         }, {
             threshold: 0.05,
-            rootMargin: '300px' // Prefetch 300px before scrolling into view
+            rootMargin: '300px'
         });
 
         observer.observe(currentElement);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchExternalMetadata } from '../services/metadata';
 import { fetchLyrics, parseLrc, ensureLineWords } from '../services/lyrics';
+import { updateCachedSong } from '../lib/indexedDbStorage';
 
 const isTitleMatch = (searchedTitle, candidateTrackName) => {
     if (!searchedTitle || !candidateTrackName) return false;
@@ -65,6 +66,8 @@ export const usePlayerMetadata = ({
                     thumbnail: metadata.thumbnail || s.thumbnail
                 };
             };
+            const enrichedSongData = updateSong(song);
+            updateCachedSong(enrichedSongData).catch(() => {});
 
             setSongs(prev => {
                 const idx = prev.findIndex(s => s.id === song.id);

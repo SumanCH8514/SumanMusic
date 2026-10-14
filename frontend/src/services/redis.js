@@ -1,73 +1,45 @@
 import { ENV } from '../config/env';
+import { getCachedTrackMetadata, setCachedTrackMetadata, cleanupExpiredMetadata } from '../lib/indexedDbStorage';
 
 const memoryCache = new Map();
-const LOCAL_STORAGE_PREFIX = 'sm_cache_';
 
 class RedisClient {
   constructor() {
-    this.url = (ENV.REDIS?.REST_URL || '').trim().replace(/\/+$/, '');
-    this.token = (ENV.REDIS?.REST_TOKEN || '').trim();
-    this.isReadEnabled = Boolean(this.url && this.token);
-    this.isWriteEnabled = Boolean(this.url && this.token);
+    this.backendUrl = (ENV.BACKEND_URL || '').trim().replace(/\/+$/, '');
+    this.isEnabled = Boolean(this.backendUrl);
   }
 
-  async fetch(path, options = {}) {
-    if (!this.isReadEnabled) return null;
+  async get(key) {
+    if (!this.isEnabled || !key) return null;
     try {
-      const response = await fetch(`${this.url}${path}`, {
-        ...options,
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
-          ...(options.headers || {})
-        }
+      const res = await fetch(`${this.backendUrl}/api/cache?key=${encodeURIComponent(key)}`, {
+        signal: AbortSignal.timeout(3000)
       });
-      if (response.status === 403) {
-        this.isWriteEnabled = false;
-        return null;
-      }
-      if (!response.ok) return null;
-      return await response.json();
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json?.data ?? null;
     } catch {
       return null;
     }
   }
 
-  async get(key) {
-    if (!this.isReadEnabled) return null;
-    const res = await this.fetch(`/get/${encodeURIComponent(key)}`);
-    if (!res || res.result === null || res.result === undefined) return null;
-    
-    if (typeof res.result === 'string') {
-      try {
-        return JSON.parse(res.result);
-      } catch {
-        return res.result;
-      }
+  async set(key, data, ttlSeconds = 86400) {
+    if (!this.isEnabled || !key || data === undefined) return false;
+    try {
+      const res = await fetch(`${this.backendUrl}/api/cache`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, data, ttl: ttlSeconds }),
+        signal: AbortSignal.timeout(4000)
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
-    return res.result;
   }
 
-  async set(key, value, ttlSeconds = null) {
-    if (!this.isWriteEnabled) return false;
-    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-    const path = ttlSeconds
-      ? `/set/${encodeURIComponent(key)}?ex=${ttlSeconds}`
-      : `/set/${encodeURIComponent(key)}`;
-    
-    const res = await this.fetch(path, {
-      method: 'POST',
-      body: serialized
-    });
-    return res?.result === 'OK';
-  }
-
-  async del(key) {
-    if (!this.isWriteEnabled) return false;
-    const res = await this.fetch(`/del/${encodeURIComponent(key)}`, {
-      method: 'POST'
-    });
-    return res?.result > 0;
+  async del(_key) {
+    return false;
   }
 }
 
@@ -85,33 +57,22 @@ export const redisGet = async (key) => {
   }
 
   try {
-    const raw = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${key}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (!parsed.expiry || Date.now() < parsed.expiry) {
-        memoryCache.set(key, parsed);
-        return parsed.data;
-      }
-      localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${key}`);
+    const idbData = await getCachedTrackMetadata(key);
+    if (idbData !== null && idbData !== undefined) {
+      memoryCache.set(key, { data: idbData, expiry: Date.now() + 60 * 60 * 1000 });
+      return idbData;
     }
-  } catch (_) {
-  }
+  } catch (_) {}
 
-  if (redis.isReadEnabled) {
+  if (redis.isEnabled) {
     try {
       const remoteData = await redis.get(key);
       if (remoteData !== null && remoteData !== undefined) {
         memoryCache.set(key, { data: remoteData, expiry: Date.now() + 60 * 60 * 1000 });
-        try {
-          localStorage.setItem(
-            `${LOCAL_STORAGE_PREFIX}${key}`,
-            JSON.stringify({ data: remoteData, expiry: Date.now() + 60 * 60 * 1000 })
-          );
-        } catch (_) { }
+        setCachedTrackMetadata(key, remoteData, 60 * 60 * 1000).catch(() => {});
         return remoteData;
       }
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   return null;
@@ -125,17 +86,10 @@ export const redisSet = async (key, data, ttlSeconds = 86400) => {
 
   memoryCache.set(key, payload);
 
-  try {
-    localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${key}`, JSON.stringify(payload));
-  } catch (_) {
-    try {
-      const keysToClean = Object.keys(localStorage).filter(k => k.startsWith(LOCAL_STORAGE_PREFIX));
-      keysToClean.slice(0, 20).forEach(k => localStorage.removeItem(k));
-      localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${key}`, JSON.stringify(payload));
-    } catch (_) { }
-  }
+  const ttlMs = ttlSeconds ? ttlSeconds * 1000 : 7 * 24 * 60 * 60 * 1000;
+  setCachedTrackMetadata(key, data, ttlMs).catch(() => {});
 
-  if (redis.isWriteEnabled) {
+  if (redis.isEnabled) {
     redis.set(key, data, ttlSeconds).catch(() => {});
   }
 };
@@ -143,11 +97,5 @@ export const redisSet = async (key, data, ttlSeconds = 86400) => {
 export const redisDel = async (key) => {
   if (!key) return;
   memoryCache.delete(key);
-  try {
-    localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${key}`);
-  } catch (_) { }
-
-  if (redis.isWriteEnabled) {
-    await redis.del(key).catch(() => {});
-  }
+  cleanupExpiredMetadata(key).catch(() => {});
 };

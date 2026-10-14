@@ -2,6 +2,17 @@ import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 
+const hexToRgba = (hex, alpha = 1) => {
+  if (!hex || typeof hex !== 'string') return `rgba(255, 255, 255, ${alpha})`;
+  let c = hex.replace('#', '').trim();
+  if (c.length === 3) c = c.split('').map((x) => x + x).join('');
+  if (c.length !== 6) return `rgba(255, 255, 255, ${alpha})`;
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 export const KaraokeLyricLine = memo(({
   line,
   isActive,
@@ -12,8 +23,11 @@ export const KaraokeLyricLine = memo(({
   align = 'center',
   size = 'md',
   lyricsStyle = 'rhythmic',
+  lyricsColor = '#ffffff',
   className = ''
 }) => {
+  const activeColor = lyricsColor || '#ffffff';
+
   if (line?.isCountdown) {
     return (
       <motion.div
@@ -33,26 +47,32 @@ export const KaraokeLyricLine = memo(({
         <span
           className={cn(
             "w-2.5 h-2.5 rounded-full transition-all duration-300",
-            isActive
-              ? "bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)] animate-pulse"
-              : "bg-white/30"
+            isActive ? "animate-pulse" : "bg-white/30"
           )}
+          style={isActive ? {
+            backgroundColor: activeColor,
+            boxShadow: `0 0 12px ${hexToRgba(activeColor, 0.9)}`
+          } : undefined}
         />
         <span
           className={cn(
             "w-2.5 h-2.5 rounded-full transition-all duration-300",
-            isActive
-              ? "bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)] animate-pulse [animation-delay:300ms]"
-              : "bg-white/30"
+            isActive ? "animate-pulse [animation-delay:300ms]" : "bg-white/30"
           )}
+          style={isActive ? {
+            backgroundColor: activeColor,
+            boxShadow: `0 0 12px ${hexToRgba(activeColor, 0.9)}`
+          } : undefined}
         />
         <span
           className={cn(
             "w-2.5 h-2.5 rounded-full transition-all duration-300",
-            isActive
-              ? "bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)] animate-pulse [animation-delay:600ms]"
-              : "bg-white/30"
+            isActive ? "animate-pulse [animation-delay:600ms]" : "bg-white/30"
           )}
+          style={isActive ? {
+            backgroundColor: activeColor,
+            boxShadow: `0 0 12px ${hexToRgba(activeColor, 0.9)}`
+          } : undefined}
         />
       </motion.div>
     );
@@ -82,12 +102,15 @@ export const KaraokeLyricLine = memo(({
       }}
       transition={{ type: "spring", damping: 26, stiffness: 220 }}
       onClick={onClick}
+      style={{
+        filter: isActive
+          ? (isLineStyle ? undefined : `drop-shadow(0 0 24px ${hexToRgba(activeColor, 0.35)})`)
+          : undefined
+      }}
       className={cn(
         "cursor-pointer transition-all duration-300 select-none py-1.5 px-3 rounded-2xl group flex flex-col",
         alignClasses,
-        isActive
-          ? (isLineStyle ? "" : "drop-shadow-[0_0_24px_rgba(255,255,255,0.35)]")
-          : "hover:opacity-75 hover:filter-none",
+        !isActive && "hover:opacity-75 hover:filter-none",
         className
       )}
     >
@@ -96,10 +119,12 @@ export const KaraokeLyricLine = memo(({
           <span
             className={cn(
               "transition-all duration-200 inline-block font-extrabold tracking-tight",
-              isActive
-                ? "text-white"
-                : "text-white/30 group-hover:text-white/55"
+              !isActive && "text-white/30 group-hover:text-white/55"
             )}
+            style={isActive ? {
+              color: activeColor,
+              textShadow: `0 0 20px ${hexToRgba(activeColor, 0.45)}`
+            } : undefined}
           >
             {line?.text}
           </span>
@@ -116,6 +141,7 @@ export const KaraokeLyricLine = memo(({
                 : 0;
 
             const progressPct = (progress * 100).toFixed(1);
+            const inactiveColor = hexToRgba(activeColor, 0.32);
 
             return (
               <span
@@ -128,15 +154,19 @@ export const KaraokeLyricLine = memo(({
                 }}
                 style={{
                   backgroundImage: isWordActive
-                    ? `linear-gradient(to right, var(--color-text-primary, #ffffff) 0%, var(--color-text-primary, #ffffff) ${progressPct}%, rgba(255, 255, 255, 0.3) ${progressPct}%, rgba(255, 255, 255, 0.3) 100%)`
+                    ? `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${progressPct}%, ${inactiveColor} ${progressPct}%, ${inactiveColor} 100%)`
                     : undefined,
                   WebkitBackgroundClip: isWordActive ? 'text' : undefined,
-                  WebkitTextFillColor: isWordActive ? 'transparent' : undefined
+                  WebkitTextFillColor: isWordActive ? 'transparent' : undefined,
+                  color: !isWordActive && isWordPast && isActive ? activeColor : undefined,
+                  textShadow: isWordActive
+                    ? `0 0 16px ${hexToRgba(activeColor, 0.95)}, 0 0 28px ${hexToRgba(activeColor, 0.5)}`
+                    : undefined
                 }}
                 className={cn(
                   "inline-block transition-transform duration-150 origin-bottom",
-                  isWordActive && "scale-[1.08] font-black text-white drop-shadow-[0_0_16px_rgba(255,255,255,0.95)] drop-shadow-[0_0_28px_rgba(255,255,255,0.5)]",
-                  !isWordActive && isWordPast && isActive && "text-text-primary",
+                  isWordActive && "scale-[1.08] font-black",
+                  !isWordActive && isWordPast && isActive && "font-black drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]",
                   !isWordActive && !isWordPast && isActive && "text-white/35",
                   !isActive && "text-text-secondary/70 group-hover:text-text-secondary"
                 )}
@@ -152,19 +182,21 @@ export const KaraokeLyricLine = memo(({
               ? Math.min(1, Math.max(0, (currentTime - (line?.time || 0)) / lineDur))
               : (currentTime >= (line?.time || 0) + lineDur ? 1 : 0);
             const linePct = (lineProgress * 100).toFixed(1);
+            const inactiveColor = hexToRgba(activeColor, 0.35);
 
             return (
               <span
                 style={{
                   backgroundImage: isActive
-                    ? `linear-gradient(to right, var(--color-text-primary, #ffffff) 0%, var(--color-text-primary, #ffffff) ${linePct}%, rgba(255, 255, 255, 0.35) ${linePct}%, rgba(255, 255, 255, 0.35) 100%)`
+                    ? `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${linePct}%, ${inactiveColor} ${linePct}%, ${inactiveColor} 100%)`
                     : undefined,
                   WebkitBackgroundClip: isActive ? 'text' : undefined,
-                  WebkitTextFillColor: isActive ? 'transparent' : undefined
+                  WebkitTextFillColor: isActive ? 'transparent' : undefined,
+                  textShadow: isActive ? `0 0 18px ${hexToRgba(activeColor, 0.45)}` : undefined
                 }}
                 className={cn(
                   "transition-all duration-150 inline-block",
-                  isActive ? "font-black drop-shadow-[0_0_18px_rgba(255,255,255,0.4)]" : "text-text-secondary/50"
+                  isActive ? "font-black" : "text-text-secondary/50"
                 )}
               >
                 {line?.text}

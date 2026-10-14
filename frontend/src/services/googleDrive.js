@@ -1,23 +1,24 @@
 import { ENV } from '../config/env';
 import { apiFetch } from '../lib/api';
-import { redisGet, redisSet, redisDel } from './redis';
+import { getCachedSongs, saveCachedSongs, getCatalogueMeta } from '../lib/indexedDbStorage';
+import { getCatalogFromFirestore, saveCatalogToFirestore } from './firestoreCatalog';
 
-export const invalidateGDriveCache = async (folderId = null) => {
-  const targetFolderId = folderId || ENV.GDRIVE.FOLDER_ID;
-  if (targetFolderId) {
-    await redisDel(`gdrive_songs_${targetFolderId}`);
-  }
+export const invalidateGDriveCache = async () => {
+  try {
+    await fetch(`${ENV.BACKEND_URL}/api/catalog/sync`, { method: 'POST' });
+  } catch {}
 };
 
 export const fetchPersonalSongsFromDrive = async (accessToken, forceRefresh = false) => {
   if (!accessToken) return [];
-  const cacheKey = `gdrive_personal_songs_${accessToken.slice(-16)}`;
 
   if (!forceRefresh) {
-    const cached = await redisGet(cacheKey);
-    if (Array.isArray(cached) && cached.length > 0) {
-      return cached;
-    }
+    try {
+      const cached = await getCachedSongs('personal');
+      if (Array.isArray(cached) && cached.length > 0) {
+        return cached;
+      }
+    } catch {}
   }
 
   const fields = "files(id,name,mimeType,size,webContentLink,thumbnailLink,videoMediaMetadata,createdTime)";
@@ -86,7 +87,7 @@ export const fetchPersonalSongsFromDrive = async (accessToken, forceRefresh = fa
     });
 
     if (musicSongs.length > 0) {
-      await redisSet(cacheKey, musicSongs, 86400);
+      saveCachedSongs('personal', musicSongs).catch(() => {});
     }
     return musicSongs;
   } catch (error) {
@@ -96,30 +97,94 @@ export const fetchPersonalSongsFromDrive = async (accessToken, forceRefresh = fa
   }
 };
 
-export const fetchSongsFromDrive = async (apiKey, accessToken = null, forceRefresh = false) => {
-  const { FOLDER_ID } = ENV.GDRIVE;
-  const cacheKey = `gdrive_songs_${FOLDER_ID || 'default'}`;
-
-  if (!forceRefresh) {
-    const cachedSongs = await redisGet(cacheKey);
-    if (Array.isArray(cachedSongs) && cachedSongs.length > 0) {
-      return cachedSongs;
-    }
-  }
-
+const revalidateInbuiltCatalogue = async (meta = null) => {
   try {
-    const backendUrl = `${ENV.BACKEND_URL}/api/gdrive/songs`;
+    let backendUrl = `${ENV.BACKEND_URL}/api/gdrive/songs`;
+    if (meta?.version) {
+      backendUrl += `?v=${encodeURIComponent(meta.version)}`;
+    }
+
+    const response = await fetch(backendUrl);
+
+    if (response.status === 304) {
+      return null;
+    }
+
+    if (response.ok) {
+      const backendSongs = await response.json();
+      if (Array.isArray(backendSongs) && backendSongs.length > 0) {
+        const etag = response.headers.get('ETag') || `"${Date.now()}_${backendSongs.length}"`;
+        const version = response.headers.get('X-Catalog-Version') || `v_${Date.now()}`;
+
+        await saveCachedSongs('inbuilt', backendSongs, version, etag);
+        saveCatalogToFirestore('inbuilt', backendSongs, version).catch(() => {});
+
+        window.dispatchEvent(new CustomEvent('sumanmusic-catalog-updated', {
+          detail: { scope: 'inbuilt', songs: backendSongs, version }
+        }));
+
+        return backendSongs;
+      }
+    }
+  } catch {}
+  return null;
+};
+
+export const syncInbuiltCatalogue = async () => {
+  try {
+    const backendUrl = `${ENV.BACKEND_URL}/api/gdrive/songs?refresh=true`;
     const response = await fetch(backendUrl);
     if (response.ok) {
       const backendSongs = await response.json();
       if (Array.isArray(backendSongs) && backendSongs.length > 0) {
-        await redisSet(cacheKey, backendSongs, 86400);
+        const etag = response.headers.get('ETag') || `"${Date.now()}_${backendSongs.length}"`;
+        const version = response.headers.get('X-Catalog-Version') || `v_${Date.now()}`;
+
+        await saveCachedSongs('inbuilt', backendSongs, version, etag);
+        saveCatalogToFirestore('inbuilt', backendSongs, version).catch(() => {});
+
+        window.dispatchEvent(new CustomEvent('sumanmusic-catalog-updated', {
+          detail: { scope: 'inbuilt', songs: backendSongs, version }
+        }));
+
         return backendSongs;
       }
     }
-  } catch (backendErr) {
-    console.warn("Backend worker fetch failed, attempting client fallback:", backendErr.message);
+  } catch (err) {
+    console.error("Manual sync failed:", err);
   }
+  return null;
+};
+
+export const fetchSongsFromDrive = async (apiKey, accessToken = null, forceRefresh = false) => {
+  const { FOLDER_ID } = ENV.GDRIVE;
+
+  if (!forceRefresh) {
+    try {
+      const cachedSongs = await getCachedSongs('inbuilt');
+      if (Array.isArray(cachedSongs) && cachedSongs.length > 0) {
+        getCatalogueMeta('inbuilt').then(meta => {
+          revalidateInbuiltCatalogue(meta);
+        });
+        return cachedSongs;
+      }
+    } catch {}
+  }
+
+  try {
+    const freshSongs = await revalidateInbuiltCatalogue(null);
+    if (freshSongs && freshSongs.length > 0) {
+      return freshSongs;
+    }
+  } catch {}
+
+  try {
+    const firestoreData = await getCatalogFromFirestore('inbuilt');
+    if (firestoreData && Array.isArray(firestoreData.songs) && firestoreData.songs.length > 0) {
+      saveCachedSongs('inbuilt', firestoreData.songs, firestoreData.version).catch(() => {});
+      return firestoreData.songs;
+    }
+  } catch {}
 
   if (!apiKey || !FOLDER_ID) {
     return [];
@@ -214,7 +279,8 @@ export const fetchSongsFromDrive = async (apiKey, accessToken = null, forceRefre
     );
 
     if (uniqueSongs.length > 0) {
-      await redisSet(cacheKey, uniqueSongs, 86400);
+      saveCachedSongs('inbuilt', uniqueSongs).catch(() => {});
+      saveCatalogToFirestore('inbuilt', uniqueSongs).catch(() => {});
     }
 
     return uniqueSongs;

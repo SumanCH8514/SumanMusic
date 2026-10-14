@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { fetchSongsFromDrive, fetchPersonalSongsFromDrive } from '../services/googleDrive';
+import { fetchSongsFromDrive, fetchPersonalSongsFromDrive, syncInbuiltCatalogue } from '../services/googleDrive';
 import { fetchYouTubeVideoById } from '../services/youtube';
 import { useAudio } from '../hooks/useAudio';
 import { useGDrive } from './GDriveContext';
@@ -19,6 +19,7 @@ export const PlayerProgressContext = createContext();
 
 export const PlayerProvider = ({ children }) => {
   const [songs, setSongs] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [queue, setQueue] = useState(() => {
     try {
       const saved = localStorage.getItem('suman_music_last_queue_obj');
@@ -202,7 +203,7 @@ export const PlayerProvider = ({ children }) => {
     };
   }, [isPlaying, requestWakeLock, releaseWakeLock]);
 
-  const loadSongs = useCallback(async () => {
+  const loadSongs = useCallback(async (force = false) => {
     if (loadingGDrive) return;
     setIsLoading(true);
     setError(null);
@@ -213,7 +214,7 @@ export const PlayerProvider = ({ children }) => {
 
       try {
         if (librarySource === 'inbuilt' || librarySource === 'hybrid') {
-          ibSongs = await fetchSongsFromDrive(activeKey);
+          ibSongs = await fetchSongsFromDrive(activeKey, null, force);
         }
       } catch (e) {
         console.warn("Failed fetching inbuilt songs", e);
@@ -221,7 +222,7 @@ export const PlayerProvider = ({ children }) => {
 
       try {
         if ((librarySource === 'personal' || librarySource === 'hybrid') && personalDriveToken) {
-          pdSongs = await fetchPersonalSongsFromDrive(personalDriveToken);
+          pdSongs = await fetchPersonalSongsFromDrive(personalDriveToken, force);
         }
       } catch (e) {
         console.warn("Failed fetching personal songs", e);
@@ -259,8 +260,45 @@ export const PlayerProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-
   }, [activeKey, loadingGDrive, librarySource, personalDriveToken, disconnectPersonalDrive, showToast]);
+
+  const syncLibrary = useCallback(async (force = true) => {
+    setIsSyncing(true);
+    try {
+      if (force) {
+        const fresh = await syncInbuiltCatalogue();
+        if (fresh && fresh.length > 0) {
+          showToast("Library synced with Google Drive", "success");
+        } else {
+          await loadSongs(true);
+          showToast("Library is up to date", "success");
+        }
+      } else {
+        await loadSongs(false);
+      }
+    } catch {
+      showToast("Failed to sync library", "error");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [loadSongs, showToast]);
+
+  useEffect(() => {
+    const handleCatalogUpdate = (e) => {
+      const { songs: updatedSongs } = e.detail || {};
+      if (Array.isArray(updatedSongs) && updatedSongs.length > 0) {
+        setSongs(prev => {
+          if (prev.length === updatedSongs.length && prev[0]?.id === updatedSongs[0]?.id) {
+            return prev;
+          }
+          return updatedSongs;
+        });
+      }
+    };
+
+    window.addEventListener('sumanmusic-catalog-updated', handleCatalogUpdate);
+    return () => window.removeEventListener('sumanmusic-catalog-updated', handleCatalogUpdate);
+  }, []);
 
   const hasRestoredInitialRef = useRef(false);
 
@@ -641,7 +679,9 @@ export const PlayerProvider = ({ children }) => {
       setIsFullScreen,
       initYouTube,
       enrichMetadata,
-      refreshSongs: loadSongs
+      refreshSongs: loadSongs,
+      isSyncing,
+      syncLibrary
     }}>
       <PlayerProgressContext.Provider value={{ progress, currentTime }}>
         {showExpiryModal && <ExpiryModal />}

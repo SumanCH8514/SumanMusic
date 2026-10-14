@@ -9,6 +9,13 @@
     "dev": "npm --prefix frontend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
-    "lint": "npm --prefix frontend run lint"
+    "lint": "npm --prefix frontend run lint",
+    "build:frontend": "npm --prefix frontend run build",
+    "deploy:backend": "npm --prefix backend run deploy",
+    "deploy:frontend": "npm --prefix frontend run deploy",
+    "deploy": "npm run deploy:backend && npm run deploy:frontend"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
   }
 }

@@ -15,6 +15,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
+import { clearUserCache } from '../lib/indexedDbStorage';
 
 const AuthContext = createContext();
 
@@ -133,6 +134,7 @@ export const AuthProvider = ({ children }) => {
   const disconnectPersonalDrive = () => {
     setPersonalDriveToken(null);
     localStorage.removeItem('suman_music_drive_token');
+    clearUserCache('personal').catch(() => {});
   };
 
   const connectYouTube = async () => {
@@ -244,6 +246,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('suman_music_guest');
     localStorage.removeItem('suman_music_drive_token');
     localStorage.removeItem('suman_music_youtube_token');
+    clearUserCache('personal').catch(() => {});
   };
 
   return (

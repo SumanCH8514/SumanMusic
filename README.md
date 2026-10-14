@@ -118,15 +118,15 @@ SumanMusic/
 ## 📸 Screenshots
 
 <div align="center">
-  <img src="public/screenshots/landing.png" width="800" alt="SumanMusic Landing Page">
+  <img src="frontend/public/screenshots/landing.png" width="800" alt="SumanMusic Landing Page">
   <p><i>The Landing Page: A premium entry point into your music ecosystem.</i></p>
 
   <br>
 
   <table style="width:100%">
     <tr>
-      <td width="50%"><img src="public/screenshots/home_dark.png" alt="SumanMusic Home Dark"></td>
-      <td width="50%"><img src="public/screenshots/home_light.png" alt="SumanMusic Home Light"></td>
+      <td width="50%"><img src="frontend/public/screenshots/home_dark.png" alt="SumanMusic Home Dark"></td>
+      <td width="50%"><img src="frontend/public/screenshots/home_light.png" alt="SumanMusic Home Light"></td>
     </tr>
     <tr>
       <td align="center"><b>Elegant Dark Mode</b></td>
@@ -138,8 +138,8 @@ SumanMusic/
 
   <table style="width:100%">
     <tr>
-      <td width="50%"><img src="public/screenshots/player_expanded.png" alt="SumanMusic Expanded Player"></td>
-      <td width="50%"><img src="public/screenshots/search.png" alt="SumanMusic Search"></td>
+      <td width="50%"><img src="frontend/public/screenshots/player_expanded.png" alt="SumanMusic Expanded Player"></td>
+      <td width="50%"><img src="frontend/public/screenshots/search.png" alt="SumanMusic Search"></td>
     </tr>
     <tr>
       <td align="center"><b>Immersive Player & Lyrics</b></td>

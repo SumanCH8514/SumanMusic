@@ -1,10 +1,4 @@
 <?php
-/**
- * index.php - Dynamic Meta Tag Generator for SumanMusic
- * Intercepts crawler requests to provide rich link previews for tracks, albums, and playlists.
- */
-
-// --- CONFIGURATION ---
 $GDRIVE_KEYS = [
     "YOUR_API_KEY_1",
     "YOUR_API_KEY_2",
@@ -16,7 +10,6 @@ $DEFAULT_DESC = "Connect your Google Drive and start streaming your personal mus
 $DEFAULT_IMAGE = "https://songs.sumanonline.com/favicon.png";
 $BASE_URL = "https://" . $_SERVER['HTTP_HOST'];
 
-// --- HELPER FUNCTIONS ---
 function fetch_url($url)
 {
     if (function_exists('curl_init')) {
@@ -34,11 +27,8 @@ function fetch_url($url)
     return @file_get_contents($url);
 }
 
-// --- CRAWLER DETECTION ---
 $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
 $isCrawler = preg_match('/facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Embedly|googlebot|TelegramBot|Slackbot|discordbot|Applebot|Pingdom|Tumblr/i', $userAgent);
-
-// --- PARAMETER DETECTION (More robust) ---
 
 $queryParams = [];
 parse_str($_SERVER['QUERY_STRING'] ?? '', $queryParams);
@@ -56,12 +46,9 @@ $image = $DEFAULT_IMAGE;
 $type = "website";
 
 if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
-    // 1. Handle Track Sharing
     if ($trackId) {
         $type = "music.song";
         $title = "Track on SumanMusic";
-
-
 
         $response = false;
         foreach ($GDRIVE_KEYS as $key) {
@@ -77,7 +64,6 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
             $data = json_decode($response, true);
             if (!empty($data['name'])) {
                 $rawName = $data['name'];
-                // Clean up filename
                 $cleanName = preg_replace('/\.(mp3|m4a|wav|flac)$/i', '', $rawName);
                 $cleanName = str_ireplace(['SumanOnline.Com', 'SumanOnline', '_'], ['', '', ' '], $cleanName);
                 $cleanName = trim(preg_replace('/\s+/', ' ', $cleanName));
@@ -85,15 +71,12 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
 
                 $title = $cleanName;
 
-                // Attempt to split into Artist - Title for better iTunes search
                 $searchQuery = $cleanName;
                 $parts = preg_split('/\s+[-|]\s+/', $cleanName);
                 if (count($parts) >= 2) {
-                    // Try searching for just the components which is often more accurate
                     $searchQuery = $parts[0] . " " . $parts[1];
                 }
 
-                // Enhance with iTunes API
                 $itunesUrl = "https://itunes.apple.com/search?term=" . urlencode($searchQuery) . "&entity=song&limit=1";
                 $itunesRes = fetch_url($itunesUrl);
                 if ($itunesRes) {
@@ -108,8 +91,6 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
             }
         }
     }
-
-    // 2. Handle Album Sharing
     elseif ($filter === 'Albums' && $album) {
         $type = "music.album";
         $title = $album . ($artist ? " - " . $artist : "");
@@ -128,8 +109,6 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
             }
         }
     }
-
-    // 3. Handle Artist Sharing
     elseif ($filter === 'Artists' && $artist) {
         $type = "profile";
         $title = $artist;
@@ -145,7 +124,6 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
                 $title = $res['artistName'];
                 $description = "Artist • " . ($res['primaryGenreName'] ?? 'Music');
 
-                // Fetch an album cover to use as the artist image (iTunes doesn't always provide artist images in search)
                 $albumSearch = "https://itunes.apple.com/search?term=" . $query . "&entity=album&limit=1";
                 $albumRes = fetch_url($albumSearch);
                 if ($albumRes) {
@@ -157,30 +135,23 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
             }
         }
     }
-
-    // 3. Handle Playlist Sharing
     elseif ($filter === 'Playlists' && ($playlistName || $playlistId)) {
         $type = "music.playlist";
         $title = $playlistName ? $playlistName : "Shared Playlist";
         $description = "Check out this playlist on SumanMusic!";
-    // We could fetch from Firestore here if we had the Project ID and didn't mind the latency
     }
 
-    // --- INJECT METADATA INTO TEMPLATE ---
     if (file_exists('index.html')) {
         $html = file_get_contents('index.html');
 
-        // Simple regex-based replacement
         $html = preg_replace('/<title>.*?<\/title>/', "<title>" . htmlspecialchars($title) . "</title>", $html);
 
-        // Open Graph
         $html = preg_replace('/<meta property="og:type" content=".*?" \/>/', '<meta property="og:type" content="' . $type . '" />', $html);
         $html = preg_replace('/<meta property="og:title" content=".*?" \/>/', '<meta property="og:title" content="' . htmlspecialchars($title) . '" />', $html);
         $html = preg_replace('/<meta property="og:description" content=".*?" \/>/', '<meta property="og:description" content="' . htmlspecialchars($description) . '" />', $html);
         $html = preg_replace('/<meta property="og:image" content=".*?" \/>/', '<meta property="og:image" content="' . htmlspecialchars($image) . '" />', $html);
         $html = preg_replace('/<meta property="og:url" content=".*?" \/>/', '<meta property="og:url" content="' . $BASE_URL . $_SERVER['REQUEST_URI'] . '" />', $html);
 
-        // Twitter
         $html = preg_replace('/<meta property="twitter:title" content=".*?" \/>/', '<meta property="twitter:title" content="' . htmlspecialchars($title) . '" />', $html);
         $html = preg_replace('/<meta property="twitter:description" content=".*?" \/>/', '<meta property="twitter:description" content="' . htmlspecialchars($description) . '" />', $html);
         $html = preg_replace('/<meta property="twitter:image" content=".*?" \/>/', '<meta property="twitter:image" content="' . htmlspecialchars($image) . '" />', $html);
@@ -188,7 +159,6 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
         echo $html;
     }
     else {
-        // Fallback for dev or missing file
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -209,7 +179,6 @@ if ($isCrawler && ($trackId || $album || $playlistName || $playlistId)) {
     exit;
 }
 
-// --- SERVE THE REGULAR SPA ---
 if (file_exists('index.html')) {
     echo file_get_contents('index.html');
 }

@@ -559,7 +559,7 @@ const LyricLine = memo(({ text, isActive, onClick }) => {
 const LyricsPanel = memo(({
   isLyricsLoading, lyrics, activeIndex, lyricsContainerRef, handleLyricsScroll,
   seek, duration, activeSong, setIsAutoScrollEnabled, isExpanded, onToggle,
-  subTab, setSubTab, lyricsOffset = 0
+  subTab, setSubTab, lyricsOffset = 0, lyricsColor = '#ffffff'
 }) => {
   const { currentTime } = usePlayerProgress();
   return (
@@ -658,6 +658,7 @@ const LyricsPanel = memo(({
                       currentTime={currentTime + ((lyricsOffset || 0) / 1000)}
                       size="sm"
                       align="center"
+                      lyricsColor={lyricsColor}
                       onClick={() => {
                         typeof line.time === 'number' && line.time >= 0 && duration > 0 && seek((line.time / duration) * 100);
                         setIsAutoScrollEnabled(true);
@@ -1062,7 +1063,7 @@ const DesktopLyricsTab = memo(({
   currentSong, lyricsOffset, onChangeOffset, lyricsSource, onChangeSource,
   onReloadLyrics, isLyricsReloading, isTranslating, isTranslationLoading,
   translations, onToggleTranslation, translationMode = 'en', onChangeTranslationMode,
-  lyricsStyle = 'rhythmic', onChangeStyle
+  lyricsStyle = 'rhythmic', onChangeStyle, lyricsColor = '#ffffff', onChangeColor
 }) => {
   const { currentTime } = usePlayerProgress();
   const lyricsContainerRef = useRef(null);
@@ -1113,6 +1114,7 @@ const DesktopLyricsTab = memo(({
               size="md"
               align="left"
               lyricsStyle={lyricsStyle}
+              lyricsColor={lyricsColor}
               onClick={() => {
                 if (typeof line.time === 'number' && line.time >= 0 && duration > 0) seek((line.time / duration) * 100);
                 setIsAutoScrollEnabled(true);
@@ -1130,6 +1132,7 @@ const DesktopLyricsTab = memo(({
               currentSource={lyricsSource}
               currentStyle={lyricsStyle}
               currentTranslationMode={translationMode}
+              currentColor={lyricsColor}
               offset={lyricsOffset}
               isTranslating={isTranslating}
               isTranslationLoading={isTranslationLoading}
@@ -1139,6 +1142,7 @@ const DesktopLyricsTab = memo(({
               onChangeOffset={onChangeOffset}
               onChangeSource={onChangeSource}
               onChangeStyle={onChangeStyle}
+              onChangeColor={onChangeColor}
               onReload={onReloadLyrics}
             />
           </div>
@@ -1332,6 +1336,21 @@ const MusicPlayer = () => {
     setLyricsStyle(newStyle);
     try {
       localStorage.setItem('sumanmusic_lyrics_style', newStyle);
+    } catch {}
+  }, []);
+
+  const [lyricsColor, setLyricsColor] = useState(() => {
+    try {
+      return localStorage.getItem('sumanmusic_lyrics_color') || '#ffffff';
+    } catch {
+      return '#ffffff';
+    }
+  });
+
+  const handleChangeColor = useCallback((newColor) => {
+    setLyricsColor(newColor);
+    try {
+      localStorage.setItem('sumanmusic_lyrics_color', newColor);
     } catch {}
   }, []);
 
@@ -2048,6 +2067,7 @@ const MusicPlayer = () => {
                                     currentSource={lyricsSource}
                                     currentStyle={lyricsStyle}
                                     currentTranslationMode={translationMode}
+                                    currentColor={lyricsColor}
                                     offset={lyricsOffset}
                                     isTranslating={isTranslating}
                                     isTranslationLoading={isTranslationLoading}
@@ -2057,6 +2077,7 @@ const MusicPlayer = () => {
                                     onChangeOffset={handleChangeOffset}
                                     onChangeSource={handleChangeSource}
                                     onChangeStyle={handleChangeStyle}
+                                    onChangeColor={handleChangeColor}
                                     onReload={handleReloadLyrics}
                                     placement="top"
                                     size="sm"
@@ -2091,6 +2112,7 @@ const MusicPlayer = () => {
                                             size="sm"
                                             align="left"
                                             lyricsStyle={lyricsStyle}
+                                            lyricsColor={lyricsColor}
                                             onClick={() => {
                                               typeof line.time === 'number' && line.time >= 0 && duration > 0 && seek((line.time / duration) * 100);
                                               setIsAutoScrollEnabled(true);
@@ -2369,6 +2391,8 @@ const MusicPlayer = () => {
                             onChangeTranslationMode={handleChangeTranslationMode}
                             lyricsStyle={lyricsStyle}
                             onChangeStyle={handleChangeStyle}
+                            lyricsColor={lyricsColor}
+                            onChangeColor={handleChangeColor}
                           />
                         )}
 

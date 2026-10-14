@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Heart, Play, Pause, Clock, MoreHorizontal, ListMusic, LayoutGrid, List, Music2, Trash2, Music, Globe, Lock, Share2, PlayCircle, ArrowLeft, Square, EyeOff, Loader2, HardDrive } from 'lucide-react';
+import { Search, Heart, Play, Pause, Clock, MoreHorizontal, ListMusic, LayoutGrid, List, Music2, Trash2, Music, Globe, Lock, Share2, PlayCircle, ArrowLeft, Square, EyeOff, Loader2, HardDrive, RotateCw } from 'lucide-react';
 import { usePlayer } from '../context/usePlayer';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
@@ -189,7 +189,7 @@ const SongItem = React.memo(({
 });
 
 const Library = () => {
-  const { songs, playSong, playQueue, currentSong, isPlaying, setOptionsSong, likedSongs, enrichMetadata, isLoading } = usePlayer();
+  const { songs, playSong, playQueue, currentSong, isPlaying, setOptionsSong, likedSongs, enrichMetadata, isLoading, isSyncing, syncLibrary } = usePlayer();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -486,6 +486,15 @@ const Library = () => {
       >
         <h1 className="text-3xl md:text-4xl font-black text-text-primary tracking-tight">Library.</h1>
         <div className="flex items-center gap-3">
+           <button 
+            onClick={() => syncLibrary(true)}
+            disabled={isSyncing}
+            className="p-3 rounded-full bg-bg-surface border border-border-main/10 text-text-secondary hover:text-primary transition-all hover:scale-110 active:scale-95 shadow-lg disabled:opacity-50"
+            title={isSyncing ? "Syncing with Google Drive..." : "Sync Library with Google Drive"}
+            aria-label={isSyncing ? "Syncing with Google Drive..." : "Sync Library with Google Drive"}
+           >
+              <RotateCw className={cn("w-5 h-5", isSyncing && "animate-spin text-primary")} />
+           </button>
            <button 
             onClick={() => navigate('/app/search')}
             className="p-3 rounded-full bg-bg-surface border border-border-main/10 text-text-secondary hover:text-primary transition-all hover:scale-110 active:scale-95 shadow-lg"

@@ -30,11 +30,6 @@ export const ENV = {
     LASTFM: {
         API_KEY: import.meta.env.VITE_LASTFM_API_KEY || "",
     },
-
-    REDIS: {
-        REST_URL: import.meta.env.VITE_REDIS_REST_URL || import.meta.env.VITE_UPSTASH_REDIS_REST_URL || "",
-        REST_TOKEN: import.meta.env.VITE_REDIS_REST_TOKEN || import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN || "",
-    },
     
     FIREBASE: {
         API_KEY: import.meta.env.VITE_FIREBASE_API_KEY || "",

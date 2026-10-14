@@ -1,4 +1,5 @@
 import { ENV } from '../config/env';
+import { getCachedTrackMetadata, setCachedTrackMetadata, clearAllIndexedDBCache } from '../lib/indexedDbStorage';
 
 const CACHE_NAME = 'suman_meta_cache';
 const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000;
@@ -30,6 +31,7 @@ export const getMetadataConfig = () => ({
 
 export const clearMetadataCache = () => {
   memoryCache.clear();
+  clearAllIndexedDBCache().catch(() => {});
   try {
     Object.keys(localStorage)
       .filter(k => k.startsWith(CACHE_NAME))
@@ -37,10 +39,17 @@ export const clearMetadataCache = () => {
   } catch {}
 };
 
-const getCachedMetadata = (key) => {
+const getCachedMetadata = async (key) => {
   if (memoryCache.has(key)) {
     return memoryCache.get(key);
   }
+  try {
+    const idbData = await getCachedTrackMetadata(key);
+    if (idbData !== null && idbData !== undefined) {
+      memoryCache.set(key, idbData);
+      return idbData;
+    }
+  } catch {}
   try {
     const raw = localStorage.getItem(`${CACHE_NAME}_${key}`);
     if (!raw) return null;
@@ -50,6 +59,7 @@ const getCachedMetadata = (key) => {
       return null;
     }
     memoryCache.set(key, data);
+    setCachedTrackMetadata(key, data, CACHE_EXPIRY).catch(() => {});
     return data;
   } catch {
     return null;
@@ -59,6 +69,7 @@ const getCachedMetadata = (key) => {
 const setCachedMetadata = (key, data) => {
   if (!data) return;
   memoryCache.set(key, data);
+  setCachedTrackMetadata(key, data, CACHE_EXPIRY).catch(() => {});
   try {
     localStorage.setItem(`${CACHE_NAME}_${key}`, JSON.stringify({ data, timestamp: Date.now() }));
   } catch {
@@ -171,9 +182,10 @@ const fetchFromJioSaavn = async (artist, title) => {
   const query = cleanQuery(artist, title);
   if (!query) return null;
 
+  const saavnTarget = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`;
   const endpoints = [
-    `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`)}`
+    `https://corsproxy.sumanonline.com/?${saavnTarget}`,
+    saavnTarget
   ];
 
   for (const url of endpoints) {
@@ -255,7 +267,8 @@ const fetchFromDeezer = async (artist, title) => {
   if (!query) return null;
 
   try {
-    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=1`)}`;
+    const deezerTarget = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=1`;
+    const url = `https://corsproxy.sumanonline.com/?${deezerTarget}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (response.ok) {
       const data = await response.json();
@@ -313,7 +326,7 @@ export const fetchExternalMetadata = async (artist, title, options = {}) => {
   const fallback = options.fallback !== undefined ? options.fallback : activeFallback;
 
   const cacheKey = `${provider}_${fallback ? 'fb' : 'nofb'}_${safeArtist}_${title}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const cached = getCachedMetadata(cacheKey);
+  const cached = await getCachedMetadata(cacheKey);
   if (cached) {
     if (cached._notFound) return null;
     return cached;
