@@ -6,6 +6,7 @@ import { fetchYouTubeSearch, fetchYouTubeCategory } from './services/youtube.ser
 import { fetchMetadata } from './services/metadata.service.js';
 import { fetchLyrics } from './services/lyrics.service.js';
 import { fetchArtistImage } from './services/artist.service.js';
+import { fetchTrackFromSpotify, searchSpotify } from './services/spotify.service.js';
 import { proxyStream } from './services/stream.service.js';
 
 export default {
@@ -396,6 +397,58 @@ export default {
             'X-Cache': 'MISS',
             'Cache-Control': 'public, max-age=86400'
           });
+        }
+
+        if (pathname === '/api/metadata') {
+          const artist = url.searchParams.get('artist') || '';
+          const title = url.searchParams.get('title') || '';
+          const provider = (url.searchParams.get('provider') || 'auto').toLowerCase();
+          const fallback = url.searchParams.get('fallback') !== 'false';
+          if (!title) {
+            return jsonResponse(null, 200);
+          }
+
+          const cacheKey = `meta_v2_${provider}_${fallback ? 'fb' : 'nofb'}_${(artist + '_' + title).toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+          const cached = await redisGet(env, cacheKey);
+          if (cached) {
+            return jsonResponse(cached === '__not_found__' ? null : cached, 200, {
+              'X-Cache': 'HIT-REDIS',
+              'Cache-Control': 'public, max-age=604800'
+            });
+          }
+
+          const meta = await fetchMetadata(artist, title, env, provider, fallback);
+          if (meta) {
+            await redisSet(env, cacheKey, meta, 1209600);
+          } else {
+            await redisSet(env, cacheKey, '__not_found__', 259200);
+          }
+
+          return jsonResponse(meta, 200, {
+            'X-Cache': 'MISS',
+            'Cache-Control': 'public, max-age=604800'
+          });
+        }
+
+        if (pathname === '/api/spotify/metadata') {
+          const artist = url.searchParams.get('artist') || '';
+          const title = url.searchParams.get('title') || '';
+          if (!title) {
+            return errorResponse('Title parameter is required', 400);
+          }
+          const track = await fetchTrackFromSpotify(artist, title, env);
+          return jsonResponse({ track }, 200);
+        }
+
+        if (pathname === '/api/spotify/search') {
+          const q = url.searchParams.get('q') || '';
+          const type = url.searchParams.get('type') || 'track';
+          const limit = Math.min(parseInt(url.searchParams.get('limit') || '10', 10), 50);
+          if (!q) {
+            return errorResponse('Query parameter q is required', 400);
+          }
+          const results = await searchSpotify(q, type, limit, env);
+          return jsonResponse(results, 200);
         }
 
         if (pathname === '/api/stream') {

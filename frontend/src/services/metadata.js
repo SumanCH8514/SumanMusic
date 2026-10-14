@@ -277,6 +277,20 @@ const fetchFromDeezer = async (artist, title) => {
   return null;
 };
 
+const fetchFromSpotify = async (artist, title) => {
+  try {
+    const url = `${ENV.BACKEND_URL}/api/spotify/metadata?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.track && (data.track.cover || data.track.title)) {
+        return data.track;
+      }
+    }
+  } catch {}
+  return null;
+};
+
 const fetchFromBackendWorker = async (artist, title, provider = 'auto', fallback = true) => {
   try {
     const url = `${ENV.BACKEND_URL}/api/metadata?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}&provider=${encodeURIComponent(provider)}&fallback=${fallback}`;
@@ -306,6 +320,7 @@ export const fetchExternalMetadata = async (artist, title, options = {}) => {
   }
 
   const clientDispatch = {
+    spotify: () => fetchFromSpotify(safeArtist, title),
     apple: () => fetchFromITunes(safeArtist, title),
     jiosaavn: () => fetchFromJioSaavn(safeArtist, title),
     lastfm: () => fetchFromLastFM(safeArtist, title),
@@ -329,7 +344,7 @@ export const fetchExternalMetadata = async (artist, title, options = {}) => {
   metadata = await fetchFromBackendWorker(safeArtist, title, provider, fallback);
 
   if (!metadata && fallback) {
-    const fallbackOrder = ['apple', 'jiosaavn', 'lastfm', 'deezer'].filter(p => p !== provider);
+    const fallbackOrder = ['spotify', 'apple', 'jiosaavn', 'lastfm', 'deezer'].filter(p => p !== provider);
     for (const key of fallbackOrder) {
       const fetcher = clientDispatch[key];
       if (fetcher) {

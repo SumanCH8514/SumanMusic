@@ -1,3 +1,5 @@
+import { fetchArtistImageFromSpotify } from './spotify.service.js';
+
 async function fetchArtistImageFromJioSaavn(artist) {
   try {
     const saavnUrl = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(artist)}`;
@@ -56,11 +58,12 @@ export async function fetchArtistImage(artist, env = {}, preferredProvider = 'au
 
   const norm = (preferredProvider || 'auto').toLowerCase();
   const providers = {
+    spotify: () => fetchArtistImageFromSpotify(artist, env),
     lastfm: () => fetchArtistImageFromLastFM(artist, env),
     jiosaavn: () => fetchArtistImageFromJioSaavn(artist)
   };
 
-  const defaultOrder = ['jiosaavn', 'lastfm'];
+  const defaultOrder = ['spotify', 'jiosaavn', 'lastfm'];
   let runOrder = [];
 
   if (norm !== 'auto' && providers[norm]) {

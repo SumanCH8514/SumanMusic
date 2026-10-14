@@ -1,3 +1,5 @@
+import { fetchTrackFromSpotify } from './spotify.service.js';
+
 function decodeHtml(str = '') {
   if (!str) return '';
   return str
@@ -268,6 +270,7 @@ async function fetchFromAudioDb(artist, title) {
 
 async function fetchSinglePass(artist, title, env = {}, preferredProvider = 'auto', enableFallback = true) {
   const providerFetchers = {
+    spotify: () => fetchTrackFromSpotify(artist, title, env),
     apple: () => fetchFromAppleMusic(artist, title),
     jiosaavn: () => fetchFromJioSaavn(artist, title),
     lastfm: () => fetchFromLastFM(artist, title, env),
@@ -275,7 +278,7 @@ async function fetchSinglePass(artist, title, env = {}, preferredProvider = 'aut
     theaudiodb: () => fetchFromAudioDb(artist, title)
   };
 
-  const defaultOrder = ['apple', 'jiosaavn', 'lastfm', 'deezer', 'theaudiodb'];
+  const defaultOrder = ['spotify', 'apple', 'jiosaavn', 'lastfm', 'deezer', 'theaudiodb'];
   let runOrder = [];
 
   const normPreferred = (preferredProvider || 'auto').toLowerCase();

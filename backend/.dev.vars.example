@@ -22,3 +22,8 @@ UPSTASH_REDIS_REST_TOKEN="your_upstash_redis_rest_token"
 
 # Last.fm API Key (optional: for high-res artist avatar resolution fallback)
 LASTFM_API_KEY="your_lastfm_api_key"
+
+# Spotify Web API Credentials (for rich track metadata, high-res 640x640 covers, and artist avatars)
+# Create a free app at: https://developer.spotify.com/dashboard
+SPOTIFY_CLIENT_ID="your_spotify_client_id"
+SPOTIFY_CLIENT_SECRET="your_spotify_client_secret"
