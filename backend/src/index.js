@@ -234,26 +234,38 @@ export default {
           const provider = (url.searchParams.get('provider') || 'auto').toLowerCase();
           const fallback = url.searchParams.get('fallback') !== 'false';
 
-          if (!artist || !title) {
-            return jsonResponse(null);
+          if (!title) {
+            return jsonResponse(null, 200);
           }
 
-          const cacheKey = `meta_v4_${provider}_${fallback ? 'fb' : 'nofb'}_${artist}_${title}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const cacheKey = ('meta_v4_' + provider + '_' + (fallback ? 'fb' : 'nofb') + '_' + artist + '_' + title).toLowerCase().replace(/[^a-z0-9]/g, '_');
           const cached = await redisGet(env, cacheKey);
           if (cached) {
+            if (cached === '__not_found__' || cached?._notFound) {
+              return jsonResponse(null, 200, {
+                'X-Cache': 'HIT-REDIS-NEGATIVE',
+                'Cache-Control': 'public, max-age=21600'
+              });
+            }
             return jsonResponse(cached, 200, {
               'X-Cache': 'HIT-REDIS',
-              'Cache-Control': 'public, max-age=604800'
+              'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400'
             });
           }
 
           const metadata = await fetchMetadata(artist, title, env, provider, fallback);
-          if (metadata) {
-            await redisSet(env, cacheKey, metadata, 604800);
+          if (metadata && (metadata.cover || metadata.title)) {
+            await redisSet(env, cacheKey, metadata, 1209600);
+            return jsonResponse(metadata, 200, {
+              'X-Cache': 'MISS',
+              'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400'
+            });
           }
-          return jsonResponse(metadata, 200, {
-            'X-Cache': 'MISS',
-            'Cache-Control': 'public, max-age=604800'
+
+          await redisSet(env, cacheKey, '__not_found__', 259200);
+          return jsonResponse(null, 200, {
+            'X-Cache': 'MISS-NEGATIVE',
+            'Cache-Control': 'public, max-age=21600'
           });
         }
 
@@ -476,37 +488,6 @@ export default {
           return jsonResponse({ imageUrl: foundImage }, 200, {
             'X-Cache': 'MISS',
             'Cache-Control': 'public, max-age=86400'
-          });
-        }
-
-        if (pathname === '/api/metadata') {
-          const artist = url.searchParams.get('artist') || '';
-          const title = url.searchParams.get('title') || '';
-          const provider = (url.searchParams.get('provider') || 'auto').toLowerCase();
-          const fallback = url.searchParams.get('fallback') !== 'false';
-          if (!title) {
-            return jsonResponse(null, 200);
-          }
-
-          const cacheKey = `meta_v2_${provider}_${fallback ? 'fb' : 'nofb'}_${(artist + '_' + title).toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-          const cached = await redisGet(env, cacheKey);
-          if (cached) {
-            return jsonResponse(cached === '__not_found__' ? null : cached, 200, {
-              'X-Cache': 'HIT-REDIS',
-              'Cache-Control': 'public, max-age=604800'
-            });
-          }
-
-          const meta = await fetchMetadata(artist, title, env, provider, fallback);
-          if (meta) {
-            await redisSet(env, cacheKey, meta, 1209600);
-          } else {
-            await redisSet(env, cacheKey, '__not_found__', 259200);
-          }
-
-          return jsonResponse(meta, 200, {
-            'X-Cache': 'MISS',
-            'Cache-Control': 'public, max-age=604800'
           });
         }
 

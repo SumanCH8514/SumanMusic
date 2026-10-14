@@ -185,29 +185,7 @@ const fetchFromLastFM = async (artistName, artistSlug) => {
   return null;
 };
 
-const fetchFromYouTube = async (artistName, artistSlug) => {
-  const keys = ENV.YOUTUBE.API_KEYS;
-  if (!keys || keys.length === 0) return null;
-  const apiKey = keys[0];
-
-  try {
-    const url = `${ENV.YOUTUBE.BASE_URL}/search?part=snippet&type=channel&q=${encodeURIComponent(artistName)}&maxResults=1&key=${apiKey}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data?.items?.[0]?.snippet?.thumbnails) {
-      const item = data.items[0];
-      const channelTitle = item.snippet.channelTitle || item.snippet.title;
-      if (!isNameMatch(artistName, channelTitle)) {
-        return null;
-      }
-      const thumbs = item.snippet.thumbnails;
-      const best = thumbs.high?.url || thumbs.medium?.url || thumbs.default?.url || null;
-      return claimImageUrl(best, artistSlug);
-    }
-  } catch {}
-  return null;
-};
+const fetchFromYouTube = async () => null;
 
 export const clearArtistCache = () => {
   memoryCache.clear();

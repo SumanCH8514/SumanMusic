@@ -1,23 +1,21 @@
 import { ENV } from '../config/env';
 
-
 const deadKeys = new Set();
 
 const getApiKeys = () => {
-  return ENV.YOUTUBE.API_KEYS.filter(key => !deadKeys.has(key));
+  return (ENV.YOUTUBE?.API_KEYS || []).filter(key => !deadKeys.has(key));
 };
 
 export const clearDeadKeys = () => deadKeys.clear();
 
-const BASE_URL = ENV.YOUTUBE.BASE_URL;
+const BASE_URL = ENV.YOUTUBE?.BASE_URL || 'https://www.googleapis.com/youtube/v3';
 
-// Local Memory + Session Cache to drastically reduce YouTube Data API quota consumption (search costs 100 units)
 const queryCache = new Map();
 
 const getCachedData = (key) => {
   if (queryCache.has(key)) {
     const { data, timestamp } = queryCache.get(key);
-    if (Date.now() - timestamp < 30 * 60 * 1000) { // 30 minutes cache
+    if (Date.now() - timestamp < 30 * 60 * 1000) {
       return data;
     }
     queryCache.delete(key);
@@ -32,7 +30,7 @@ const getCachedData = (key) => {
       }
       sessionStorage.removeItem(`yt_cache_${key}`);
     }
-  } catch (_) { /* ignore */ }
+  } catch {}
   return null;
 };
 
@@ -41,21 +39,16 @@ const setCachedData = (key, data) => {
   queryCache.set(key, payload);
   try {
     sessionStorage.setItem(`yt_cache_${key}`, JSON.stringify(payload));
-  } catch (_) { /* ignore */ }
+  } catch {}
 };
 
-/**
- * Internal fetch with multi-key failover support.
- */
 const fetchWithFailover = async (endpoint, params, attempt = 0) => {
   const apiKeys = getApiKeys();
   const userToken = localStorage.getItem('suman_music_youtube_token');
 
-  // Try user OAuth token on first attempt only if present
   const useUserToken = userToken && attempt === 0;
   
   if (!useUserToken && apiKeys.length === 0) {
-    console.warn("All available YouTube API keys are currently exhausted or blocked.");
     return { items: [] };
   }
 
@@ -85,7 +78,6 @@ const fetchWithFailover = async (endpoint, params, attempt = 0) => {
       const errorData = await response.json().catch(() => ({}));
       const reason = errorData.error?.errors?.[0]?.reason || "unknown";
 
-      // 403 Forbidden (e.g. referer blocked), 429 Too Many Requests, or Quota Exceeded
       if (response.status === 403 || response.status === 429 || reason === "quotaExceeded" || reason === "rateLimitExceeded" || reason === "forbidden" || reason === "accessNotConfigured") {
         if (!useUserToken && apiKey) {
           deadKeys.add(apiKey);
@@ -100,7 +92,7 @@ const fetchWithFailover = async (endpoint, params, attempt = 0) => {
     }
 
     return await response.json();
-  } catch (_error) {
+  } catch {
     if (apiKey) {
       deadKeys.add(apiKey);
     }
@@ -111,7 +103,6 @@ const fetchWithFailover = async (endpoint, params, attempt = 0) => {
   }
 };
 
-
 const parseISODuration = (isoDuration) => {
   const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
@@ -121,10 +112,6 @@ const parseISODuration = (isoDuration) => {
   return hours * 3600 + minutes * 60 + seconds;
 };
 
-
-/**
- * Normalize and clean raw YouTube video titles & channel names into professional music metadata
- */
 export const cleanYouTubeMusicMetadata = (rawTitle, channelTitle = '') => {
   if (!rawTitle) return { title: 'Unknown Track', artist: channelTitle || 'Unknown Artist' };
 
@@ -136,17 +123,12 @@ export const cleanYouTubeMusicMetadata = (rawTitle, channelTitle = '') => {
     .replace(/ Records$/i, '')
     .trim();
 
-  // 1. Remove bracketed / parenthetical noise
   title = title.replace(/\[\s*(official|audio|video|lyrics?|hd|4k|8k|full\s*song|remix|teaser|promo|exclusive|jukebox|live|unplugged|bhojpuri|hindi|punjabi|hit\s*song)[^\]]*\]/gi, '');
   title = title.replace(/\(\s*(official|audio|video|lyrics?|hd|4k|8k|full\s*song|remix|teaser|promo|exclusive|jukebox|live|unplugged|bhojpuri|hindi|punjabi|hit\s*song)[^)]*\)/gi, '');
-
-  // 2. Remove hashtag spam (#Video, #HitSong, #Trending, etc.)
   title = title.replace(/#\S+/g, '');
 
-  // 3. Handle Pipe separators e.g. "Song Title | Movie Name | Singer Name"
   if (title.includes('|')) {
     const pipeParts = title.split('|').map(p => p.trim()).filter(Boolean);
-    // Find candidate segments
     const cleanSegments = pipeParts.filter(p => !/(video|hit\s*song|\d{4}|music\s*video|official|lyrical|audio|full\s*hd|bhojpuri)/i.test(p));
     if (cleanSegments.length > 0) {
       title = cleanSegments[0];
@@ -158,7 +140,6 @@ export const cleanYouTubeMusicMetadata = (rawTitle, channelTitle = '') => {
     }
   }
 
-  // 4. Handle "Artist - Title" format
   if (title.includes(' - ')) {
     const parts = title.split(' - ');
     if (parts.length === 2) {
@@ -171,7 +152,6 @@ export const cleanYouTubeMusicMetadata = (rawTitle, channelTitle = '') => {
     }
   }
 
-  // 5. Clean trailing noise, symbols, and whitespace
   title = title
     .replace(/[|•–\-:]+$/, '')
     .replace(/^[|•–\-:]+/, '')
@@ -190,7 +170,6 @@ export const fetchYouTubeCategory = async (query, maxResults = 20) => {
   const cached = getCachedData(cacheKey);
   if (cached && cached.length > 0) return cached;
 
-  // 1. Primary: Cloudflare Worker Backend
   try {
     const backendUrl = `${ENV.BACKEND_URL}/api/youtube/category?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
     const response = await fetch(backendUrl);
@@ -205,9 +184,8 @@ export const fetchYouTubeCategory = async (query, maxResults = 20) => {
         return result;
       }
     }
-  } catch (_) { /* ignore */ }
+  } catch {}
 
-  // 2. Client Fallback - enforce videoCategoryId=10 (Music)
   try {
     const searchEndpoint = `/search?part=snippet&maxResults=${maxResults}&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10`;
     const searchData = await fetchWithFailover(searchEndpoint);
@@ -246,19 +224,15 @@ export const fetchYouTubeCategory = async (query, maxResults = 20) => {
       setCachedData(cacheKey, result);
     }
     return result;
-  } catch (_) {
+  } catch {
     return [];
   }
 };
 
-/**
- * Fetch a single YouTube video by video ID for direct URL loading & refreshing.
- */
 export const fetchYouTubeVideoById = async (videoId) => {
   if (!videoId) return null;
   const cleanId = videoId.replace(/^yt_/, '');
 
-  // 1. Backend Search Proxy
   try {
     const backendUrl = `${ENV.BACKEND_URL}/api/youtube/search?q=${cleanId}&maxResults=1`;
     const response = await fetch(backendUrl);
@@ -279,11 +253,8 @@ export const fetchYouTubeVideoById = async (videoId) => {
         };
       }
     }
-  } catch (err) {
-    console.warn("Backend YouTube fetch by ID failed, attempting fallback:", err);
-  }
+  } catch {}
 
-  // 2. Client Fallback
   try {
     const detailsEndpoint = `/videos?part=snippet,contentDetails&id=${cleanId}`;
     const detailsData = await fetchWithFailover(detailsEndpoint);
@@ -302,11 +273,8 @@ export const fetchYouTubeVideoById = async (videoId) => {
         duration: parseISODuration(item.contentDetails?.duration || '')
       };
     }
-  } catch (err) {
-    console.warn("Client YouTube fetch by ID failed:", err);
-  }
+  } catch {}
 
-  // 3. Fallback constructed object
   return {
     id: `yt_${cleanId}`,
     videoId: cleanId,
@@ -319,9 +287,6 @@ export const fetchYouTubeVideoById = async (videoId) => {
   };
 };
 
-/**
- * Fetch User's Liked YouTube Music Videos (EXCLUSIVELY filtered for categoryId 10 - Music)
- */
 export const fetchYouTubeLikedSongs = async (maxResults = 50) => {
   try {
     const userToken = localStorage.getItem('suman_music_youtube_token');
@@ -338,7 +303,6 @@ export const fetchYouTubeLikedSongs = async (maxResults = 50) => {
     const detailsEndpoint = `/videos?part=snippet,contentDetails,topicDetails&id=${videoIds}`;
     const detailsData = await fetchWithFailover(detailsEndpoint);
 
-    // Strictly filter ONLY categoryId 10 (Music) or music topic categories
     const filteredItems = (detailsData.items || []).filter(item => {
       const isMusicCategory = item.snippet?.categoryId === '10';
       const hasMusicTopic = item.topicDetails?.topicCategories?.some(t => t.toLowerCase().includes('music'));
@@ -354,22 +318,18 @@ export const fetchYouTubeLikedSongs = async (maxResults = 50) => {
         id: `yt_${item.id}`,
         title,
         artist,
-        cover: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
+        cover: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url,
         url: `https://www.youtube.com/watch?v=${item.id}`,
         videoId: item.id,
         isYouTube: true,
         duration: parseISODuration(item.contentDetails?.duration || '')
       };
     });
-  } catch (err) {
-    console.warn("Error fetching user's YouTube liked songs:", err);
+  } catch {
     return [];
   }
 };
 
-/**
- * Fetch YouTube Trending Music Chart in India (Category 10: Music only, regionCode: IN)
- */
 export const fetchYouTubeTrendingMusic = async (maxResults = 20) => {
   const cacheKey = `trending_in_${maxResults}`;
   const cached = getCachedData(cacheKey);
@@ -405,21 +365,17 @@ export const fetchYouTubeTrendingMusic = async (maxResults = 20) => {
         return result;
       }
     }
-  } catch (_) { /* ignore */ }
+  } catch {}
 
-  // Fallback to India Category Search
-  const fallback = await fetchYouTubeCategory("Trending Music Songs India 2025 Official Hits", maxResults);
+  const fallback = await fetchYouTubeCategory("Trending Music Songs India Official Hits", maxResults);
   if (fallback.length > 0) {
     setCachedData(cacheKey, fallback);
   }
   return fallback;
 };
 
-/**
- * Algorithmic Recommendations based on user's recent artists or popular tracks
- */
 export const fetchYouTubeRecommendations = async (seedArtists = [], maxResults = 20) => {
-  let query = "Top Hits Official Music Songs 2025";
+  let query = "Top Hits Official Music Songs";
   if (seedArtists && seedArtists.length > 0) {
     const validArtists = seedArtists.filter(a => a && a !== 'Unknown Artist' && a !== 'YouTube' && !a.toLowerCase().includes('topic'));
     if (validArtists.length > 0) {
@@ -432,11 +388,6 @@ export const fetchYouTubeRecommendations = async (seedArtists = [], maxResults =
   return fetchYouTubeCategory(query, maxResults);
 };
 
-/**
- * Algorithmic Mood & Genre Tracks (Exclusively music)
- */
 export const fetchYouTubeMoodTracks = async (moodQuery, maxResults = 15) => {
   return fetchYouTubeCategory(`${moodQuery} official songs`, maxResults);
 };
-
-

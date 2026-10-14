@@ -63,7 +63,13 @@ async function fetchFromAppleMusic(artist, title) {
 
   try {
     const directUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=10`;
-    const response = await fetch(directUrl);
+    const response = await fetch(directUrl, {
+      signal: AbortSignal.timeout(3000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
+    });
     if (response.ok) {
       const data = await response.json();
       if (data && data.resultCount > 0) {
@@ -94,8 +100,9 @@ async function fetchFromJioSaavn(artist, title) {
   try {
     const saavnUrl = `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&includeMetaTags=1&q=${encodeURIComponent(query)}&n=10&p=1`;
     const res = await fetch(saavnUrl, {
+      signal: AbortSignal.timeout(3000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'application/json'
       }
     });
@@ -135,8 +142,9 @@ async function fetchFromJioSaavn(artist, title) {
   try {
     const autoUrl = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`;
     const res = await fetch(autoUrl, {
+      signal: AbortSignal.timeout(3000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'application/json'
       }
     });
@@ -181,7 +189,13 @@ async function fetchFromDeezer(artist, title) {
 
   try {
     const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10`;
-    const response = await fetch(deezerUrl);
+    const response = await fetch(deezerUrl, {
+      signal: AbortSignal.timeout(3000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
+    });
     if (response.ok) {
       const data = await response.json();
       if (data && data.data && data.data.length > 0) {
@@ -245,7 +259,7 @@ async function fetchFromLastFM(artist, title, env = {}) {
 async function fetchFromAudioDb(artist, title) {
   try {
     const audioDbUrl = `https://www.theaudiodb.com/api/v1/json/2/searchtrack.php?s=${encodeURIComponent(artist)}&t=${encodeURIComponent(title)}`;
-    const response = await fetch(audioDbUrl);
+    const response = await fetch(audioDbUrl, { signal: AbortSignal.timeout(3000) });
     if (response.ok) {
       const data = await response.json();
       if (data && data.track && data.track.length > 0) {
