@@ -56,18 +56,39 @@ const Artists = () => {
   React.useEffect(() => {
     const artistParam = searchParams.get('artist');
     if (artistParam) {
-      const artist = artistList.find(a => a.name === artistParam);
-      if (artist && artist.name !== selectedArtist?.name) {
-        setArtistInfo(null);
-        setLoadingArtistInfo(true);
-        setSelectedArtist(artist);
-        document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
+      const cleanParam = cleanArtistName(artistParam).toLowerCase();
+      const artist = artistList.find(a => 
+        a.name.toLowerCase() === artistParam.toLowerCase() || 
+        cleanArtistName(a.name).toLowerCase() === cleanParam
+      );
+      if (artist) {
+        if (artist.name !== selectedArtist?.name) {
+          setArtistInfo(null);
+          setLoadingArtistInfo(true);
+          setSelectedArtist(artist);
+          document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } else {
+        const matchingSongs = (songs || []).filter(s => {
+          const raw = (s.artist || '').toLowerCase();
+          return raw.includes(cleanParam) || cleanArtistName(s.artist || '').toLowerCase().includes(cleanParam);
+        });
+        if (selectedArtist?.name !== artistParam) {
+          setSelectedArtist({
+            name: artistParam,
+            songs: matchingSongs,
+            cover: matchingSongs[0]?.cover || null
+          });
+          setArtistInfo(null);
+          setLoadingArtistInfo(true);
+          document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
     } else if (selectedArtist !== null) {
       setArtistInfo(null);
       setSelectedArtist(null);
     }
-  }, [searchParams, artistList, selectedArtist]);
+  }, [searchParams, artistList, songs, selectedArtist]);
 
   React.useEffect(() => {
     const fetchArtistDetails = async (name) => {

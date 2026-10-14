@@ -7,7 +7,7 @@ import { fetchMetadata } from './services/metadata.service.js';
 import { fetchLyrics } from './services/lyrics.service.js';
 import { fetchArtistImage } from './services/artist.service.js';
 import { fetchTrackFromSpotify, searchSpotify } from './services/spotify.service.js';
-import { proxyStream } from './services/stream.service.js';
+import { searchYouTubeIMusic, getYouTubeIAudioUrl } from './services/youtubei.service.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -22,6 +22,7 @@ export default {
       pathname !== '/api/health' &&
       pathname !== '/' &&
       pathname !== '/api/stream' &&
+      pathname !== '/api/youtube/stream' &&
       url.searchParams.get('refresh') !== 'true';
 
     let edgeCache = null;
@@ -48,7 +49,7 @@ export default {
 
     const handleRoute = async () => {
       try {
-        if (pathname === '/api/health' || pathname === '/') {
+        if (pathname === '/api/health' || pathname === '/' || pathname === '/health' || pathname === '/api') {
           const health = await checkRedisHealth(env);
           return jsonResponse({
             status: 'ok',
@@ -61,7 +62,7 @@ export default {
           });
         }
 
-        if (pathname === '/api/catalog/status') {
+        if (pathname === '/api/catalog/status' || pathname === '/api/status') {
           const folderId = env.GDRIVE_FOLDER_ID;
           const cacheKey = `gdrive_songs_${folderId || 'default'}`;
           const versionKey = `gdrive_songs_ver_${folderId || 'default'}`;
@@ -81,7 +82,7 @@ export default {
           });
         }
 
-        if (pathname === '/api/catalog/sync' && (request.method === 'POST' || request.method === 'GET')) {
+        if ((pathname === '/api/catalog/sync' || pathname === '/api/sync') && (request.method === 'POST' || request.method === 'GET')) {
           const folderId = env.GDRIVE_FOLDER_ID;
           const cacheKey = `gdrive_songs_${folderId || 'default'}`;
           const versionKey = `gdrive_songs_ver_${folderId || 'default'}`;
@@ -112,7 +113,7 @@ export default {
           });
         }
 
-        if (pathname === '/api/gdrive/songs') {
+        if (pathname === '/api/gdrive/songs' || pathname === '/api/songs' || pathname === '/songs') {
           const folderId = env.GDRIVE_FOLDER_ID;
           const cacheKey = `gdrive_songs_${folderId || 'default'}`;
           const versionKey = `gdrive_songs_ver_${folderId || 'default'}`;
@@ -172,11 +173,137 @@ export default {
           });
         }
 
-        if (pathname === '/api/youtube/search') {
+        if (pathname === '/api/youtube/stream') {
+          const videoId = url.searchParams.get('videoId') || url.searchParams.get('v') || '';
+          if (!videoId) {
+            return errorResponse('videoId is required', 400);
+          }
+
+          const cleanVideoId = String(videoId).replace(/^yt_/, '');
+          const streamCacheKey = `yt_audio_url_v2_${cleanVideoId}`;
+
+          let streamData = null;
+
+          const cached = await redisGet(env, streamCacheKey);
+          if (cached && cached.url) {
+            try {
+              const probe = await fetch(cached.url, {
+                method: 'HEAD',
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+              });
+              if (probe.ok || probe.status === 206) {
+                streamData = cached;
+              }
+            } catch {}
+          }
+
+          if (!streamData) {
+            streamData = await Promise.race([
+              getYouTubeIAudioUrl(cleanVideoId),
+              new Promise(resolve => setTimeout(() => resolve(null), 8000))
+            ]);
+
+            if (streamData && streamData.url) {
+              await redisSet(env, streamCacheKey, streamData, 7200);
+            }
+          }
+
+          if (streamData && streamData.url) {
+            const clientRange = request.headers.get('range') || request.headers.get('Range');
+            const upstreamHeaders = {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+            };
+            if (clientRange) {
+              upstreamHeaders['Range'] = clientRange;
+            }
+
+            const audioRes = await fetch(streamData.url, {
+              headers: upstreamHeaders
+            });
+
+            if (!audioRes.ok && audioRes.status !== 206) {
+              await redisSet(env, streamCacheKey, null, 1);
+
+              const freshData = await Promise.race([
+                getYouTubeIAudioUrl(cleanVideoId),
+                new Promise(resolve => setTimeout(() => resolve(null), 6000))
+              ]);
+
+              if (freshData && freshData.url) {
+                await redisSet(env, streamCacheKey, freshData, 7200);
+                const retryRes = await fetch(freshData.url, { headers: upstreamHeaders });
+                if (retryRes.ok || retryRes.status === 206) {
+                  const resHeaders = new Headers(CORS_HEADERS);
+                  resHeaders.set('Content-Type', freshData.mimeType || 'audio/mp4');
+                  resHeaders.set('Accept-Ranges', 'bytes');
+                  resHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+                  resHeaders.set('X-Stream-Client', freshData.client || 'unknown');
+                  const contentRange = retryRes.headers.get('content-range');
+                  if (contentRange) resHeaders.set('Content-Range', contentRange);
+                  const contentLength = retryRes.headers.get('content-length');
+                  if (contentLength) resHeaders.set('Content-Length', contentLength);
+                  return new Response(retryRes.body, { status: retryRes.status, headers: resHeaders });
+                }
+              }
+
+              return errorResponse('Audio stream expired and refresh failed', 410);
+            }
+
+            const resHeaders = new Headers(CORS_HEADERS);
+            resHeaders.set('Content-Type', streamData.mimeType || 'audio/mp4');
+            resHeaders.set('Accept-Ranges', 'bytes');
+            resHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+            resHeaders.set('X-Stream-Client', streamData.client || 'unknown');
+
+            const contentRange = audioRes.headers.get('content-range');
+            if (contentRange) resHeaders.set('Content-Range', contentRange);
+            const contentLength = audioRes.headers.get('content-length');
+            if (contentLength) resHeaders.set('Content-Length', contentLength);
+
+            return new Response(audioRes.body, {
+              status: audioRes.status,
+              headers: resHeaders
+            });
+          }
+
+          return errorResponse('No playable audio stream found for this video', 404);
+        }
+
+        if (pathname === '/api/youtube/search' || pathname === '/api/search' || pathname === '/api/youtube') {
           const q = url.searchParams.get('q') || '';
           const maxResults = parseInt(url.searchParams.get('maxResults') || '20', 10);
-          const cacheKey = `yt_search_${q}_${maxResults}`;
+          const engine = (url.searchParams.get('engine') || 'youtubei').toLowerCase();
 
+          if (engine === 'youtubei') {
+            const cacheKey = `yt_innertube_search_${q}_${maxResults}`;
+            const cached = await redisGet(env, cacheKey);
+            if (cached) {
+              return jsonResponse(cached, 200, {
+                'X-Cache': 'HIT-REDIS',
+                'Cache-Control': 'public, max-age=1800'
+              });
+            }
+            let data = await Promise.race([
+              searchYouTubeIMusic(q, maxResults),
+              new Promise(resolve => setTimeout(() => resolve([]), 2500))
+            ]);
+            let payload = { items: Array.isArray(data) ? data : [] };
+            if (!Array.isArray(data) || data.length === 0) {
+              const ytKeys = parseKeys(env.YOUTUBE_API_KEYS);
+              if (ytKeys.length > 0) {
+                payload = await fetchYouTubeSearch(ytKeys, q, maxResults);
+              }
+            }
+            if (payload && payload.items && payload.items.length > 0) {
+              await redisSet(env, cacheKey, payload, 1800);
+            }
+            return jsonResponse(payload, 200, {
+              'X-Cache': 'MISS',
+              'Cache-Control': 'public, max-age=1800'
+            });
+          }
+
+          const cacheKey = `yt_search_${q}_${maxResults}`;
           const cached = await redisGet(env, cacheKey);
           if (cached) {
             return jsonResponse(cached, 200, {
@@ -200,11 +327,40 @@ export default {
           });
         }
 
-        if (pathname === '/api/youtube/category') {
+        if (pathname === '/api/youtube/category' || pathname === '/api/category') {
           const q = url.searchParams.get('q') || '';
           const maxResults = parseInt(url.searchParams.get('maxResults') || '20', 10);
-          const cacheKey = `yt_cat_${q}_${maxResults}`;
+          const engine = (url.searchParams.get('engine') || 'youtubei').toLowerCase();
 
+          if (engine === 'youtubei') {
+            const cacheKey = `yt_innertube_cat_${q}_${maxResults}`;
+            const cached = await redisGet(env, cacheKey);
+            if (cached) {
+              return jsonResponse(cached, 200, {
+                'X-Cache': 'HIT-REDIS',
+                'Cache-Control': 'public, max-age=3600'
+              });
+            }
+            let items = await Promise.race([
+              searchYouTubeIMusic(q, maxResults),
+              new Promise(resolve => setTimeout(() => resolve([]), 2500))
+            ]);
+            if (!Array.isArray(items) || items.length === 0) {
+              const ytKeys = parseKeys(env.YOUTUBE_API_KEYS);
+              if (ytKeys.length > 0) {
+                items = await fetchYouTubeCategory(ytKeys, q, maxResults);
+              }
+            }
+            if (Array.isArray(items) && items.length > 0) {
+              await redisSet(env, cacheKey, items, 3600);
+            }
+            return jsonResponse(items, 200, {
+              'X-Cache': 'MISS',
+              'Cache-Control': 'public, max-age=3600'
+            });
+          }
+
+          const cacheKey = `yt_cat_${q}_${maxResults}`;
           const cached = await redisGet(env, cacheKey);
           if (cached) {
             return jsonResponse(cached, 200, {
@@ -269,7 +425,7 @@ export default {
           });
         }
 
-        if (pathname === '/api/lyrics') {
+        if (pathname === '/api/lyrics' || pathname === '/api/lyric') {
           const artist = url.searchParams.get('artist') || '';
           const title = url.searchParams.get('title') || '';
           const album = url.searchParams.get('album') || '';
@@ -301,7 +457,7 @@ export default {
           });
         }
 
-        if (pathname === '/api/translate') {
+        if (pathname === '/api/translate' || pathname === '/api/transiate') {
           let lines = [];
           let mode = 'translation';
           if (request.method === 'POST') {
@@ -517,7 +673,14 @@ export default {
 
           if (request.method === 'GET') {
             const key = url.searchParams.get('key');
-            if (!key || !ALLOWED_PREFIXES.some(p => key.startsWith(p))) {
+            if (!key) {
+              return jsonResponse({
+                status: 'ok',
+                message: 'Cache gateway active. Specify ?key= to read cached entry.',
+                allowedPrefixes: ALLOWED_PREFIXES
+              }, 200);
+            }
+            if (!ALLOWED_PREFIXES.some(p => key.startsWith(p))) {
               return errorResponse('Invalid or unauthorized cache key', 400);
             }
 

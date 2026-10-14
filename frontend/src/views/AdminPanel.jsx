@@ -3,12 +3,27 @@ import { useAuth } from '../context/AuthContext';
 import { usePlayer } from '../context/usePlayer';
 import { useGDrive } from '../context/GDriveContext';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Users, Music, Database, Activity, ShieldAlert, Settings, ArrowLeft, RefreshCw, Trash2, Shield, Loader2, X, Globe, Disc3, CheckCircle2, Sparkles } from 'lucide-react';
+import { Users, Music, Database, Activity, ShieldAlert, Settings, ArrowLeft, RefreshCw, Trash2, Shield, Loader2, X, Globe, Disc3, CheckCircle2, Sparkles, Radio } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { cn } from '../lib/utils';
 import { useToast } from '../context/ToastContext';
 import { useSettings } from '../context/SettingsContext';
+
+const YOUTUBE_ENGINES = [
+  {
+    id: 'youtubei',
+    name: 'YouTube.js (Innertube Engine)',
+    badge: 'Recommended • 0 Quota',
+    description: 'Uses YouTube InnerTube API for searching and categories. Unlimited queries with zero API quota usage, instant search, and high-res album covers.'
+  },
+  {
+    id: 'inbuilt',
+    name: 'Inbuilt Method (Google Data API v3)',
+    badge: 'Official Google API',
+    description: 'Uses official YouTube Data API v3 keys with automated key rotation and failover for search and category discovery.'
+  }
+];
 
 const METADATA_PROVIDERS = [
   {
@@ -106,7 +121,9 @@ const AdminPanel = () => {
     metadataFallback,
     updateMetadataProvider,
     updateMetadataFallback,
-    clearMetadataCache
+    clearMetadataCache,
+    youtubePlayerEngine,
+    updateYoutubePlayerEngine
   } = useSettings();
   const [isClearingMetaCache, setIsClearingMetaCache] = useState(false);
 
@@ -574,6 +591,79 @@ const AdminPanel = () => {
                   Purge Cache
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 md:mt-12 space-y-4 md:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-gradient-to-tr from-rose-500/20 to-red-500/20 text-rose-400 border border-rose-500/30">
+                <Radio className="w-5 h-5 md:w-6 md:h-6" />
+              </div>
+              YouTube Playback & Streaming Engine
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-zinc-400">Current Active:</span>
+              <span className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                {YOUTUBE_ENGINES.find(e => e.id === (youtubePlayerEngine || 'youtubei'))?.name || 'YouTube.js'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 backdrop-blur-md rounded-[1.5rem] md:rounded-3xl p-4 md:p-8 border border-white/10 space-y-6">
+            <div>
+              <p className="text-sm font-bold text-white">Choose YouTube Playback Engine</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Select how online YouTube tracks are fetched and played across desktop and mobile devices.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {YOUTUBE_ENGINES.map((engine) => {
+                const isSelected = (youtubePlayerEngine || 'youtubei') === engine.id;
+                return (
+                  <div
+                    key={engine.id}
+                    onClick={() => {
+                      updateYoutubePlayerEngine(engine.id);
+                      showToast(`YouTube playback engine switched to ${engine.name}`);
+                    }}
+                    className={cn(
+                      "relative p-5 md:p-6 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group",
+                      isSelected
+                        ? "bg-gradient-to-br from-rose-500/10 to-red-500/5 border-rose-500/50 shadow-lg shadow-rose-500/10"
+                        : "bg-black/30 border-white/5 hover:border-white/20 hover:bg-white/5"
+                    )}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider",
+                          isSelected ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-white/10 text-zinc-400"
+                        )}>
+                          {engine.badge}
+                        </span>
+                        {isSelected && (
+                          <CheckCircle2 className="w-5 h-5 text-rose-400 shrink-0 animate-in zoom-in-50" />
+                        )}
+                      </div>
+                      <h4 className="font-bold text-white text-base md:text-lg group-hover:text-rose-300 transition-colors">
+                        {engine.name}
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                        {engine.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-5 pt-3.5 border-t border-white/5 flex items-center justify-between text-[11px] font-bold">
+                      <span className={isSelected ? "text-rose-400" : "text-zinc-500"}>
+                        {isSelected ? "● Active Primary" : "Click to Activate"}
+                      </span>
+                      <span className="text-zinc-500 font-mono text-[10px]">{engine.id}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

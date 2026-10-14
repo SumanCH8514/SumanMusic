@@ -166,12 +166,13 @@ export const cleanYouTubeMusicMetadata = (rawTitle, channelTitle = '') => {
 
 export const fetchYouTubeCategory = async (query, maxResults = 20) => {
   if (!query || !query.trim()) return [];
-  const cacheKey = `cat_${query.trim().toLowerCase()}_${maxResults}`;
+  const engine = localStorage.getItem('suman_youtube_player_engine') || 'youtubei';
+  const cacheKey = `cat_${engine}_${query.trim().toLowerCase()}_${maxResults}`;
   const cached = getCachedData(cacheKey);
   if (cached && cached.length > 0) return cached;
 
   try {
-    const backendUrl = `${ENV.BACKEND_URL}/api/youtube/category?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
+    const backendUrl = `${ENV.BACKEND_URL}/api/youtube/category?q=${encodeURIComponent(query)}&maxResults=${maxResults}&engine=${engine}`;
     const response = await fetch(backendUrl);
     if (response.ok) {
       const items = await response.json();
@@ -232,9 +233,10 @@ export const fetchYouTubeCategory = async (query, maxResults = 20) => {
 export const fetchYouTubeVideoById = async (videoId) => {
   if (!videoId) return null;
   const cleanId = videoId.replace(/^yt_/, '');
+  const engine = localStorage.getItem('suman_youtube_player_engine') || 'youtubei';
 
   try {
-    const backendUrl = `${ENV.BACKEND_URL}/api/youtube/search?q=${cleanId}&maxResults=1`;
+    const backendUrl = `${ENV.BACKEND_URL}/api/youtube/search?q=${cleanId}&maxResults=1&engine=${engine}`;
     const response = await fetch(backendUrl);
     if (response.ok) {
       const data = await response.json();

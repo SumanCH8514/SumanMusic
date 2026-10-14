@@ -30,6 +30,14 @@ export const SettingsProvider = ({ children }) => {
     }
   });
 
+  const [youtubePlayerEngine, setYoutubePlayerEngine] = useState(() => {
+    try {
+      return localStorage.getItem('suman_youtube_player_engine') || 'youtubei';
+    } catch {
+      return 'youtubei';
+    }
+  });
+
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -60,13 +68,18 @@ export const SettingsProvider = ({ children }) => {
             setMetadataFallback(data.metadataFallback);
             try { localStorage.setItem('suman_meta_fallback', String(data.metadataFallback)); } catch {}
           }
+          if (data.youtubePlayerEngine !== undefined) {
+            setYoutubePlayerEngine(data.youtubePlayerEngine);
+            try { localStorage.setItem('suman_youtube_player_engine', data.youtubePlayerEngine); } catch {}
+          }
         } else if (user?.role === 'admin') {
           setDoc(docRef, {
             isOnlineLibraryEnabled: true,
             isVoiceSearchEnabled: true,
             onlineLibraryAccess: 'all',
             metadataProvider: 'auto',
-            metadataFallback: true
+            metadataFallback: true,
+            youtubePlayerEngine: 'youtubei'
           }).catch(err => console.error(err));
         }
         setIsLoading(false);
@@ -148,6 +161,19 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [user]);
 
+  const updateYoutubePlayerEngine = useCallback(async (engine) => {
+    setYoutubePlayerEngine(engine);
+    try { localStorage.setItem('suman_youtube_player_engine', engine); } catch {}
+    if (user?.role === 'admin') {
+      try {
+        const docRef = doc(db, 'settings', 'global');
+        await setDoc(docRef, { youtubePlayerEngine: engine }, { merge: true });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, [user]);
+
   const canAccessOnline = React.useMemo(() => {
     if (!isOnlineLibraryEnabled) return false;
     
@@ -171,11 +197,13 @@ export const SettingsProvider = ({ children }) => {
       onlineLibraryAccess,
       metadataProvider,
       metadataFallback,
+      youtubePlayerEngine,
       updateOnlineLibraryEnabled,
       updateVoiceSearchEnabled,
       updateOnlineLibraryAccess,
       updateMetadataProvider,
       updateMetadataFallback,
+      updateYoutubePlayerEngine,
       clearMetadataCache: handleClearCaches,
       canAccessOnline,
       isLoading

@@ -20,6 +20,7 @@ import { LyricsFloatingMenu } from './LyricsFloatingMenu';
 import { fetchTranslations, getSongLyricsOffset, setSongLyricsOffset, fetchLyrics } from '../services/lyrics';
 import { saveTrackOffline, removeTrackOffline, isTrackOffline } from '../lib/offlineStorage';
 import { EQUALIZER_PRESETS } from '../hooks/useAudio';
+import { cleanArtistName } from '../services/artistService';
 
 const SoundBoosterIcon = ({ className, isBoosted = false }) => (
   <svg
@@ -484,7 +485,49 @@ const MarqueeTitle = memo(({ text, className }) => {
   );
 });
 
-const PlayerHero = memo(({ activeSong, likedSongs, toggleLike }) => (
+const parseArtistNames = (rawArtist) => {
+  if (!rawArtist) return [];
+  const parts = String(rawArtist).split(/(\s*,\s*|\s*&\s*|\s*\/\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+and\s+)/i);
+  const result = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const name = parts[i]?.trim();
+    const separator = parts[i + 1];
+    if (name) {
+      result.push({ name, separator: separator || '' });
+    }
+  }
+  return result;
+};
+
+const ArtistLinks = memo(({ artist, onArtistClick, className = '', linkClassName = '' }) => {
+  if (!artist) return null;
+  const parts = parseArtistNames(artist);
+  if (parts.length === 0) return null;
+
+  return (
+    <span className={cn("truncate inline", className)}>
+      {parts.map((item, idx) => (
+        <React.Fragment key={idx}>
+          <span
+            className={cn(
+              "hover:underline hover:text-text-primary transition-colors cursor-pointer inline",
+              linkClassName
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onArtistClick) onArtistClick(item.name);
+            }}
+          >
+            {item.name}
+          </span>
+          {item.separator && <span className="opacity-70 inline select-none">{item.separator}</span>}
+        </React.Fragment>
+      ))}
+    </span>
+  );
+});
+
+const PlayerHero = memo(({ activeSong, likedSongs, toggleLike, onArtistClick }) => (
   <div className="flex-1 flex flex-col justify-end md:justify-center w-full max-w-2xl min-h-0 pt-2 pb-2 md:py-8 relative">
     <div className="relative w-full flex-1 min-h-0 flex items-center justify-center mb-6 md:mb-8 group px-8 md:px-0">
       <div className="absolute inset-0 bg-primary/25 blur-[120px] rounded-full opacity-40 group-hover:opacity-70 transition-opacity duration-1000 hidden md:block" />
@@ -517,7 +560,9 @@ const PlayerHero = memo(({ activeSong, likedSongs, toggleLike }) => (
           className="text-2xl md:text-3xl font-bold text-text-primary tracking-tight"
         />
         <div className="flex items-center gap-3 text-text-secondary/60 text-base md:text-sm font-normal tracking-tight truncate w-full md:justify-center">
-          <span className="truncate">{activeSong.artist}</span>
+          <span className="truncate">
+            <ArtistLinks artist={activeSong.artist} onArtistClick={onArtistClick} />
+          </span>
           <div className="w-1.5 h-1.5 rounded-full bg-border-main/20 hidden md:block" />
           <Heart
             className={cn(
@@ -1156,7 +1201,7 @@ const DesktopLyricsTab = memo(({
   );
 });
 
-const DesktopCreditsTab = memo(({ activeSong }) => (
+const DesktopCreditsTab = memo(({ activeSong, onArtistClick }) => (
   <motion.div
     key="desktop-credits"
     initial={{ opacity: 0, x: 20 }}
@@ -1166,7 +1211,9 @@ const DesktopCreditsTab = memo(({ activeSong }) => (
   >
     <div className="space-y-2 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-border-main/5">
       <p className="text-[10px] font-black uppercase tracking-[0.4em] text-text-secondary/50">Performed by</p>
-      <p className="text-2xl font-black text-text-primary tracking-tight">{activeSong.artist}</p>
+      <p className="text-2xl font-black text-text-primary tracking-tight">
+        <ArtistLinks artist={activeSong.artist} onArtistClick={onArtistClick} linkClassName="hover:text-primary" />
+      </p>
     </div>
 
     {activeSong.album && (
@@ -1308,6 +1355,14 @@ const MusicPlayer = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isAppRoute = location.pathname.startsWith('/app');
+
+  const navigateToArtist = useCallback((artistRaw) => {
+    if (!artistRaw) return;
+    const cleanName = cleanArtistName(artistRaw.split(/\s*,\s*|\s*&\s*|\s+and\s+|\s+feat\.?\s+|\s+ft\.?\s+/i)[0].trim());
+    if (!cleanName) return;
+    setIsFullScreen(false);
+    navigate(`/app/artists?artist=${encodeURIComponent(cleanName)}`);
+  }, [navigate, setIsFullScreen]);
 
   const [lyricsOffset, setLyricsOffset] = useState(0);
   const [lyricsSource, setLyricsSource] = useState('auto');
@@ -1692,7 +1747,9 @@ const MusicPlayer = () => {
                 </motion.div>
                 <div className="min-w-0 leading-tight">
                   <h4 className="text-text-primary font-medium text-sm truncate">{activeSong.title}</h4>
-                  <p className="text-text-secondary text-xs truncate">{activeSong.artist}</p>
+                  <p className="text-text-secondary text-xs truncate">
+                    <ArtistLinks artist={activeSong.artist} onArtistClick={navigateToArtist} />
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-4 flex-shrink-0 text-text-primary">
@@ -1713,7 +1770,9 @@ const MusicPlayer = () => {
                 </div>
                 <div className="min-w-0 leading-tight flex-1">
                   <h4 className="text-text-primary font-bold text-sm lg:text-[15px] truncate hover:text-primary transition-colors cursor-pointer" onClick={() => setIsFullScreen(true)}>{activeSong.title}</h4>
-                  <p className="text-text-secondary text-xs lg:text-[13px] font-medium truncate mt-0.5 hover:text-text-primary transition-colors cursor-pointer">{activeSong.artist}</p>
+                  <p className="text-text-secondary text-xs lg:text-[13px] font-medium truncate mt-0.5">
+                    <ArtistLinks artist={activeSong.artist} onArtistClick={navigateToArtist} />
+                  </p>
                 </div>
                 <Heart
                   className={cn(
@@ -1917,7 +1976,7 @@ const MusicPlayer = () => {
                     </div>
 
                     <div className="flex-1 flex items-center justify-center min-h-0 w-full max-w-7xl mx-auto px-0 md:px-8 pb-4">
-                      <PlayerHero activeSong={activeSong} likedSongs={likedSongs} toggleLike={toggleLike} />
+                      <PlayerHero activeSong={activeSong} likedSongs={likedSongs} toggleLike={toggleLike} onArtistClick={navigateToArtist} />
                     </div>
 
                     <div className="w-full max-w-5xl mx-auto pb-4 md:pb-0 relative z-30 px-8 md:px-0 flex-shrink-0">
@@ -1994,7 +2053,17 @@ const MusicPlayer = () => {
                         </div>
                         <div className="flex-1 min-w-0 flex flex-col justify-center pt-0.5">
                           <p className="text-white font-bold text-[15px] leading-none mb-1 truncate">{activeSong.title}</p>
-                          <p className="text-white/60 text-[13px] leading-none truncate">{activeSong.artist}</p>
+                          <p className="text-white/60 text-[13px] leading-none truncate">
+                            <ArtistLinks
+                              artist={activeSong.artist}
+                              onArtistClick={(artistName) => {
+                                setIsFullScreen(false);
+                                setIsTabCollapsed(true);
+                                navigateToArtist(artistName);
+                              }}
+                              linkClassName="hover:text-white"
+                            />
+                          </p>
                         </div>
                         <div className="flex items-center gap-4 shrink-0 px-2">
                           <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} disabled={isBuffering} className="p-1 active:scale-90 transition-transform">
@@ -2145,7 +2214,17 @@ const MusicPlayer = () => {
                                     >
                                       <div className="space-y-2">
                                         <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20">PERFORMED BY</p>
-                                        <p className="text-2xl font-black text-white">{activeSong.artist}</p>
+                                        <p className="text-2xl font-black text-white">
+                                          <ArtistLinks
+                                            artist={activeSong.artist}
+                                            onArtistClick={(artistName) => {
+                                              setIsFullScreen(false);
+                                              setIsTabCollapsed(true);
+                                              navigateToArtist(artistName);
+                                            }}
+                                            linkClassName="hover:text-primary"
+                                          />
+                                        </p>
                                       </div>
 
                                       {activeSong.album && (
@@ -2397,7 +2476,7 @@ const MusicPlayer = () => {
                         )}
 
                         {activeTab === 'credits' && (
-                          <DesktopCreditsTab activeSong={activeSong} />
+                          <DesktopCreditsTab activeSong={activeSong} onArtistClick={navigateToArtist} />
                         )}
 
                         {activeTab === 'related' && (
@@ -2432,7 +2511,15 @@ const MusicPlayer = () => {
               </div>
               <div className="min-w-0 pr-4 flex-1">
                 <p className="text-base font-bold text-text-primary truncate">{optionsSong.title}</p>
-                <p className="text-sm text-text-secondary truncate">{optionsSong.artist}</p>
+                <p className="text-sm text-text-secondary truncate">
+                  <ArtistLinks
+                    artist={optionsSong.artist}
+                    onArtistClick={(artistName) => {
+                      setOptionsSong(null);
+                      navigateToArtist(artistName);
+                    }}
+                  />
+                </p>
               </div>
               <button className="w-8 h-8 rounded-full bg-bg-surface/50 border border-border-main/10 flex items-center justify-center flex-shrink-0" onClick={() => setOptionsSong(null)}>
                 <X className="w-5 h-5 text-text-primary" />
@@ -2511,8 +2598,7 @@ const MusicPlayer = () => {
                       toggleLike(optionsSong);
                       setOptionsSong(null);
                     } else if (opt.id === 'artist') {
-                      const primaryArtist = optionsSong.artist.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)[0].trim();
-                      navigate(`/app/library?filter=Artists&artist=${encodeURIComponent(primaryArtist)}`);
+                      navigateToArtist(optionsSong.artist);
                       setOptionsSong(null);
                     } else if (opt.id === 'album') {
                       navigate(`/app/library?filter=Albums&album=${encodeURIComponent(optionsSong.album)}`);

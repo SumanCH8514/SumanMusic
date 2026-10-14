@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import { useNavigate, Outlet } from 'react-router-dom';
 import MusicPlayer from './MusicPlayer';
-import { MoreHorizontal, Play, X, List, Plus, Music2, FolderPlus, Loader2, Sun, Moon, Menu, Search, User } from 'lucide-react';
+import { MoreHorizontal, Play, X, List, Plus, Music2, FolderPlus, Loader2, Sun, Moon, Menu, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { useTheme } from '../context/ThemeContext';
@@ -38,7 +38,6 @@ const Layout = () => {
              </div>
              <div className="flex items-center gap-1 sm:gap-2">
                 <button className="hidden sm:flex items-center px-4 py-1.5 rounded-full border border-border-main/20 text-sm font-bold hover:bg-border-main/5 transition-colors">Open app</button>
-                <button onClick={() => navigate('/app/search')} className="p-2 text-text-primary hover:bg-border-main/5 rounded-full transition-colors"><Search className="w-5 h-5 sm:w-6 sm:h-6" /></button>
                 <button onClick={toggleTheme} className="p-2 text-text-primary hover:bg-border-main/5 rounded-full transition-colors group">
                   {theme === 'dark' ? <Sun className="w-5 h-5 sm:w-6 sm:h-6 text-text-secondary group-hover:text-primary transition-colors" /> : <Moon className="w-5 h-5 sm:w-6 sm:h-6 text-text-secondary group-hover:text-primary transition-colors" />}
                 </button>

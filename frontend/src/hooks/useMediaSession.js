@@ -1,9 +1,5 @@
 import { useEffect } from 'react';
 
-/**
- * Hook to manage the browser Media Session API.
- * Syncs current song metadata and playback state with the OS media controller.
- */
 export const useMediaSession = ({ 
     currentSong, 
     isPlaying, 
@@ -15,7 +11,6 @@ export const useMediaSession = ({
     playPrevious, 
     seek 
 }) => {
-
     useEffect(() => {
         if ('mediaSession' in navigator && currentSong) {
             navigator.mediaSession.metadata = new window.MediaMetadata({
@@ -34,13 +29,11 @@ export const useMediaSession = ({
         }
     }, [currentSong]);
 
-
     useEffect(() => {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
     }, [isPlaying]);
-
 
     useEffect(() => {
         if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && duration > 0) {
@@ -55,7 +48,6 @@ export const useMediaSession = ({
             }
         }
     }, [currentTime, duration]);
-
 
     useEffect(() => {
         if ('mediaSession' in navigator) {
@@ -83,9 +75,7 @@ export const useMediaSession = ({
                 actions.forEach(action => {
                     try {
                         navigator.mediaSession.setActionHandler(action, null);
-                    } catch {
-                        // ignore
-                    }
+                    } catch {}
                 });
             }
         };

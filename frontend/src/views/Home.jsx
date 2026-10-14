@@ -1,5 +1,5 @@
-import { Search, MoreVertical, Play, Clock, Settings, LayoutGrid, List, Heart } from 'lucide-react';
-import { useState } from 'react';
+import { Search, MoreVertical, Play, Clock, Settings, LayoutGrid, List, Heart, Mic, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '../context/usePlayer';
 import { cn } from '../lib/utils';
@@ -20,6 +20,68 @@ const Home = () => {
   const { songs, playSong, currentSong, isPlaying, isLoading, setOptionsSong } = usePlayer();
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+    };
+  }, []);
+
+  const handleSearchSubmit = (e) => {
+    if (e) e.preventDefault();
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      navigate(`/app/search?q=${encodeURIComponent(trimmed)}`);
+    } else {
+      navigate('/app/search');
+    }
+  };
+
+  const toggleVoiceSearch = () => {
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      navigate('/app/search');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+
+      recognition.onresult = (event) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript?.trim()) {
+          setSearchQuery(transcript.trim());
+          navigate(`/app/search?q=${encodeURIComponent(transcript.trim())}`);
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch {
+      setIsListening(false);
+    }
+  };
 
   if (isLoading) {
     return <HomeSkeleton viewMode={viewMode} />;
@@ -58,25 +120,57 @@ const Home = () => {
         </div>
       </div>
 
-      <div className="md:hidden relative group">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-secondary">
-          <Search className="w-full h-full" />
-        </div>
+      <form onSubmit={handleSearchSubmit} className="md:hidden relative group">
+        <button
+          type="submit"
+          aria-label="Search"
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors focus:outline-none"
+        >
+          <Search className="w-5 h-5" />
+        </button>
         <input
           type="text"
           id="home-search-input"
           name="home-search-input"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && searchQuery.trim()) {
-              navigate(`/app/search?q=${encodeURIComponent(searchQuery.trim())}`);
-            }
-          }}
-          placeholder="Artists, songs, or podcasts"
-          className="w-full bg-bg-surface border border-border-main/10 rounded-md py-3 pl-12 pr-4 text-sm text-text-primary placeholder:text-text-secondary focus:ring-1 focus:ring-primary/50"
+          placeholder={isListening ? "Listening... Speak now" : "Artists, songs, or podcasts"}
+          enterKeyHint="search"
+          autoComplete="off"
+          className={cn(
+            "w-full bg-bg-surface border rounded-md py-3 pl-12 pr-20 text-sm text-text-primary transition-all",
+            "placeholder:text-text-secondary focus:outline-none focus:ring-1 focus:ring-primary/50",
+            isListening
+              ? "border-primary/60 ring-1 ring-primary/40 placeholder:text-primary animate-pulse"
+              : "border-border-main/10"
+          )}
         />
-      </div>
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="p-1 rounded-full text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={toggleVoiceSearch}
+            aria-label="Voice search"
+            className={cn(
+              "p-1.5 rounded-full transition-all active:scale-95 flex items-center justify-center",
+              isListening
+                ? "bg-primary text-black shadow-lg shadow-primary/30 animate-pulse"
+                : "text-text-secondary hover:text-text-primary hover:bg-border-main/10"
+            )}
+          >
+            <Mic className="w-5 h-5" />
+          </button>
+        </div>
+      </form>
 
       <section>
         <div className="flex items-center justify-between mb-4">

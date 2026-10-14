@@ -13,6 +13,7 @@ import { useMediaSession } from '../hooks/useMediaSession';
 import { usePlayerSync } from '../hooks/usePlayerSync';
 import { usePlayerMetadata } from '../hooks/usePlayerMetadata';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useSettings } from './SettingsContext';
 
 export const PlayerContext = createContext();
 export const PlayerProgressContext = createContext();
@@ -85,6 +86,8 @@ export const PlayerProvider = ({ children }) => {
     }, { replace: true });
   }, [currentSong?.id, setSearchParams]);
 
+  const { youtubePlayerEngine } = useSettings();
+
   const {
     isPlaying,
     currentTime,
@@ -109,7 +112,7 @@ export const PlayerProvider = ({ children }) => {
     isBuffering,
     initYouTube,
     getAudioInstance
-  } = useAudio();
+  } = useAudio(youtubePlayerEngine);
 
   const { activeKey, isLoading: loadingGDrive } = useGDrive();
   const wakeLock = useRef(null);
