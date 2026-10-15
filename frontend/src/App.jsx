@@ -33,6 +33,7 @@ const PrivacyPolicy = lazy(() => import('./views/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./views/TermsOfService'));
 const AboutUs = lazy(() => import('./views/AboutUs'));
 const ContactUs = lazy(() => import('./views/ContactUs'));
+const SharePlay = lazy(() => import('./views/SharePlay'));
 
 const PageLoader = () => (
   <div className="h-[60vh] w-full flex items-center justify-center">
@@ -84,6 +85,14 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <LandingPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "share/*",
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <SharePlay />
           </Suspense>
         ),
       },

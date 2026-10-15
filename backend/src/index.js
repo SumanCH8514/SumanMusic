@@ -8,6 +8,7 @@ import { fetchLyrics } from './services/lyrics.service.js';
 import { fetchArtistImage } from './services/artist.service.js';
 import { fetchTrackFromSpotify, searchSpotify } from './services/spotify.service.js';
 import { searchYouTubeIMusic, getYouTubeIAudioUrl } from './services/youtubei.service.js';
+import { proxyStream } from './services/stream.service.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -722,6 +723,142 @@ export default {
           }
 
           return errorResponse('Method not allowed', 405);
+        }
+
+        if (pathname === '/api/track') {
+          const id = url.searchParams.get('id') || url.searchParams.get('v') || '';
+          if (!id) return errorResponse('Track ID is required', 400);
+
+          const cleanId = String(id).trim();
+          const cacheKey = `track_detail_${cleanId}`;
+          const cached = await redisGet(env, cacheKey);
+          if (cached) {
+            return jsonResponse(cached, 200, {
+              'X-Cache': 'HIT-REDIS',
+              'Cache-Control': 'public, max-age=86400'
+            });
+          }
+
+          if (cleanId.startsWith('yt_') || (cleanId.length === 11 && !cleanId.includes('.'))) {
+            const videoId = cleanId.replace(/^yt_/, '');
+            const ytKeys = parseKeys(env.YOUTUBE_API_KEYS);
+            let title = "YouTube Track";
+            let artist = "YouTube Music";
+            let cover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+            let duration = 0;
+
+            let found = false;
+            if (ytKeys.length > 0) {
+              for (const k of ytKeys) {
+                try {
+                  const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${k}`);
+                  if (ytRes.ok) {
+                    const data = await ytRes.json();
+                    if (data?.items?.[0]) {
+                      const item = data.items[0];
+                      title = (item.snippet?.title || '').replace(/\[.*?\]|\(.*?\)/g, "").trim() || title;
+                      artist = item.snippet?.channelTitle || artist;
+                      cover = item.snippet?.thumbnails?.maxres?.url || item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || cover;
+                      found = true;
+                      break;
+                    }
+                  }
+                } catch {}
+              }
+            }
+
+            if (!found) {
+              try {
+                const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+                if (oembedRes.ok) {
+                  const odata = await oembedRes.json();
+                  title = odata.title || title;
+                  artist = odata.author_name || artist;
+                  cover = odata.thumbnail_url || cover;
+                }
+              } catch {}
+            }
+
+            const track = {
+              id: `yt_${videoId}`,
+              videoId,
+              title,
+              artist,
+              cover,
+              thumbnail: cover,
+              url: `https://www.youtube.com/watch?v=${videoId}`,
+              streamUrl: `${url.origin}/api/youtube/stream?videoId=${videoId}`,
+              isYouTube: true,
+              duration
+            };
+
+            await redisSet(env, cacheKey, track, 86400);
+            return jsonResponse(track, 200, { 'Cache-Control': 'public, max-age=86400' });
+          }
+
+          const folderId = env.GDRIVE_FOLDER_ID;
+          const songsCacheKey = `gdrive_songs_${folderId || 'default'}`;
+          const catalog = await redisGet(env, songsCacheKey);
+          let driveTrack = Array.isArray(catalog) ? catalog.find(s => s.id === cleanId) : null;
+
+          if (!driveTrack) {
+            const gdriveKeys = parseKeys(env.GDRIVE_API_KEYS);
+            if (gdriveKeys.length > 0) {
+              for (const k of gdriveKeys) {
+                try {
+                  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${cleanId}?fields=id,name,mimeType,size,webContentLink,thumbnailLink,videoMediaMetadata&key=${k}`);
+                  if (res.ok) {
+                    const file = await res.json();
+                    let rawName = (file.name || '').replace(/\.[^/.]+$/, "");
+                    rawName = rawName.replace(/SumanOnline\.Com/gi, "").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+                    let title = rawName;
+                    let artist = "Unknown Artist";
+                    const midDelimiters = [" - ", " | ", " – ", " -", "- ", "-", "|"];
+                    for (const d of midDelimiters) {
+                      if (rawName.includes(d)) {
+                        const parts = rawName.split(d).filter(p => p.trim().length > 0);
+                        if (parts.length >= 2) {
+                          title = parts[0].trim();
+                          artist = parts[1].trim();
+                          break;
+                        }
+                      }
+                    }
+                    driveTrack = {
+                      id: file.id,
+                      title,
+                      artist,
+                      url: `${url.origin}/api/stream?fileId=${file.id}`,
+                      driveUrl: file.webContentLink,
+                      streamUrl: `${url.origin}/api/stream?fileId=${file.id}`,
+                      thumbnail: file.thumbnailLink,
+                      cover: file.thumbnailLink,
+                      isPersonal: false
+                    };
+                    break;
+                  }
+                } catch {}
+              }
+            }
+          }
+
+          if (driveTrack) {
+            try {
+              const meta = await fetchMetadata(driveTrack.artist, driveTrack.title, env);
+              if (meta && meta.cover) {
+                driveTrack.cover = meta.cover;
+                if (meta.title) driveTrack.title = meta.title;
+                if (meta.artist) driveTrack.artist = meta.artist;
+                if (meta.album) driveTrack.album = meta.album;
+                if (meta.year) driveTrack.year = meta.year;
+              }
+            } catch {}
+
+            await redisSet(env, cacheKey, driveTrack, 86400);
+            return jsonResponse(driveTrack, 200, { 'Cache-Control': 'public, max-age=86400' });
+          }
+
+          return errorResponse('Track not found', 404);
         }
 
         if (pathname === '/api/stream') {

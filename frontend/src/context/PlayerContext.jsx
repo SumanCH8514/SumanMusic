@@ -14,6 +14,7 @@ import { usePlayerSync } from '../hooks/usePlayerSync';
 import { usePlayerMetadata } from '../hooks/usePlayerMetadata';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useSettings } from './SettingsContext';
+import { ENV } from '../config/env';
 
 export const PlayerContext = createContext();
 export const PlayerProgressContext = createContext();
@@ -351,7 +352,15 @@ export const PlayerProvider = ({ children }) => {
 
     const loadUrlTrack = async () => {
       let targetSong = songs.find(s => s.id === urlSongId);
-      if (!targetSong && urlSongId.startsWith('yt_')) {
+      if (!targetSong) {
+        try {
+          const res = await fetch(`${ENV.BACKEND_URL}/api/track?id=${encodeURIComponent(urlSongId)}`);
+          if (res.ok) {
+            targetSong = await res.json();
+          }
+        } catch {}
+      }
+      if (!targetSong && (urlSongId.startsWith('yt_') || urlSongId.length === 11)) {
         targetSong = await fetchYouTubeVideoById(urlSongId);
       }
 
@@ -368,9 +377,7 @@ export const PlayerProvider = ({ children }) => {
       }
     };
 
-    if (songs.length > 0 || urlSongId.startsWith('yt_')) {
-      loadUrlTrack();
-    }
+    loadUrlTrack();
   }, [searchParams, songs, currentSong?.id, setSource]);
 
   useEffect(() => {

@@ -2580,13 +2580,15 @@ const MusicPlayer = () => {
                         setIsAudioStudioOpen(true);
                         setOptionsSong(null);
                       } else if (opt.id === 'share') {
-                        const shareUrl = `${window.location.origin}/app/library?filter=Tracks&trackId=${encodeURIComponent(optionsSong.id)}`;
+                        const songId = optionsSong.id || optionsSong.videoId;
+                        const cleanId = String(songId).trim();
+                        const shareUrl = `${window.location.origin}/share/v=${encodeURIComponent(cleanId)}`;
                         if (navigator.share) {
                           navigator.share({
-                            title: optionsSong.title,
-                            text: `Listen to ${optionsSong.title} by ${optionsSong.artist}`,
+                            title: `${optionsSong.title} • ${optionsSong.artist} | SumanMusic`,
+                            text: `Listen to ${optionsSong.title} by ${optionsSong.artist} on SumanMusic`,
                             url: shareUrl
-                          }).catch(console.error);
+                          }).catch(() => {});
                         } else {
                           navigator.clipboard.writeText(shareUrl);
                           handleOptionClick('Link copied to clipboard');
