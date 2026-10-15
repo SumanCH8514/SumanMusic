@@ -499,13 +499,13 @@ const parseArtistNames = (rawArtist) => {
   return result;
 };
 
-const ArtistLinks = memo(({ artist, onArtistClick, className = '', linkClassName = '' }) => {
+const ArtistLinks = memo(({ artist, onArtistClick, className = '', linkClassName = '', truncate = false }) => {
   if (!artist) return null;
   const parts = parseArtistNames(artist);
   if (parts.length === 0) return null;
 
   return (
-    <span className={cn("truncate inline", className)}>
+    <span className={cn(truncate ? "truncate inline-block max-w-full align-bottom" : "break-words leading-snug inline", className)}>
       {parts.map((item, idx) => (
         <React.Fragment key={idx}>
           <span
@@ -561,7 +561,7 @@ const PlayerHero = memo(({ activeSong, likedSongs, toggleLike, onArtistClick }) 
         />
         <div className="flex items-center gap-3 text-text-secondary/60 text-base md:text-sm font-normal tracking-tight truncate w-full md:justify-center">
           <span className="truncate">
-            <ArtistLinks artist={activeSong.artist} onArtistClick={onArtistClick} />
+            <ArtistLinks artist={activeSong.artist} onArtistClick={onArtistClick} truncate />
           </span>
           <div className="w-1.5 h-1.5 rounded-full bg-border-main/20 hidden md:block" />
           <Heart
@@ -1209,9 +1209,9 @@ const DesktopCreditsTab = memo(({ activeSong, onArtistClick }) => (
     exit={{ opacity: 0, x: 20 }}
     className="space-y-8 pb-16 pr-4 pl-2 pt-4"
   >
-    <div className="space-y-2 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-border-main/5">
+    <div className="space-y-2 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-border-main/5 max-w-full overflow-hidden">
       <p className="text-[10px] font-black uppercase tracking-[0.4em] text-text-secondary/50">Performed by</p>
-      <p className="text-2xl font-black text-text-primary tracking-tight">
+      <p className="text-2xl font-black text-text-primary tracking-tight break-words">
         <ArtistLinks artist={activeSong.artist} onArtistClick={onArtistClick} linkClassName="hover:text-primary" />
       </p>
     </div>
@@ -1747,9 +1747,7 @@ const MusicPlayer = () => {
                 </motion.div>
                 <div className="min-w-0 leading-tight">
                   <h4 className="text-text-primary font-medium text-sm truncate">{activeSong.title}</h4>
-                  <p className="text-text-secondary text-xs truncate">
-                    <ArtistLinks artist={activeSong.artist} onArtistClick={navigateToArtist} />
-                  </p>
+                  <p className="text-text-secondary text-xs truncate">{activeSong.artist}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4 flex-shrink-0 text-text-primary">
@@ -1771,7 +1769,7 @@ const MusicPlayer = () => {
                 <div className="min-w-0 leading-tight flex-1">
                   <h4 className="text-text-primary font-bold text-sm lg:text-[15px] truncate hover:text-primary transition-colors cursor-pointer" onClick={() => setIsFullScreen(true)}>{activeSong.title}</h4>
                   <p className="text-text-secondary text-xs lg:text-[13px] font-medium truncate mt-0.5">
-                    <ArtistLinks artist={activeSong.artist} onArtistClick={navigateToArtist} />
+                    <ArtistLinks artist={activeSong.artist} onArtistClick={navigateToArtist} truncate />
                   </p>
                 </div>
                 <Heart
@@ -2062,6 +2060,7 @@ const MusicPlayer = () => {
                                 navigateToArtist(artistName);
                               }}
                               linkClassName="hover:text-white"
+                              truncate
                             />
                           </p>
                         </div>
@@ -2212,9 +2211,9 @@ const MusicPlayer = () => {
                                       exit={{ opacity: 0, y: -10 }}
                                       className="h-full overflow-y-auto no-scrollbar pt-4 pb-40 px-6 space-y-10"
                                     >
-                                      <div className="space-y-2">
+                                      <div className="space-y-2 max-w-full overflow-hidden">
                                         <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20">PERFORMED BY</p>
-                                        <p className="text-2xl font-black text-white">
+                                        <p className="text-2xl font-black text-white break-words">
                                           <ArtistLinks
                                             artist={activeSong.artist}
                                             onArtistClick={(artistName) => {
@@ -2228,9 +2227,9 @@ const MusicPlayer = () => {
                                       </div>
 
                                       {activeSong.album && (
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 max-w-full overflow-hidden">
                                           <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20">ALBUM</p>
-                                          <p className="text-lg font-bold text-white/80">{activeSong.album}</p>
+                                          <p className="text-lg font-bold text-white/80 break-words">{activeSong.album}</p>
                                         </div>
                                       )}
 
@@ -2496,131 +2495,153 @@ const MusicPlayer = () => {
         </>
       )}
 
-      {optionsSong && (
-        <div className="fixed inset-0 md:left-64 z-[70] flex flex-col justify-end overscroll-contain" onTouchMove={(e) => e.stopPropagation()}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOptionsSong(null)} />
-          <div className={cn(
-            "relative bg-bg-surface rounded-t-3xl pt-2 px-4 shadow-2xl border-t border-border-main/10 animate-in slide-in-from-bottom-full duration-300 pointer-events-auto pb-safe transition-colors mb-0 md:mb-20",
-            isAppRoute && "pb-0 md:pb-5"
-          )}>
-            <div className="w-12 h-1 bg-border-main/20 rounded-full mx-auto mb-4" />
+      <AnimatePresence>
+        {optionsSong && (
+          <div className="fixed inset-0 md:left-64 z-[70] flex flex-col justify-end md:items-end overscroll-contain pb-0 md:pb-20 pointer-events-none" onTouchMove={(e) => e.stopPropagation()}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto"
+              onClick={() => setOptionsSong(null)}
+            />
+            <motion.div
+              initial={isDesktop ? { opacity: 0, y: 32, scale: 0.96 } : { opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={isDesktop ? { opacity: 0, y: 20, scale: 0.96 } : { opacity: 0, y: "100%" }}
+              transition={isDesktop ? { type: "spring", damping: 26, stiffness: 360 } : { type: "spring", damping: 30, stiffness: 350 }}
+              className={cn(
+                "relative bg-bg-surface shadow-2xl border-border-main/15 pointer-events-auto transition-colors flex flex-col",
+                "w-full rounded-t-3xl pt-2 px-4 pb-safe border-t mb-0",
+                "md:w-96 lg:w-[400px] md:h-auto md:max-h-[calc(100vh-7.5rem)] md:rounded-2xl md:border md:p-6 md:pb-5 md:mr-5 md:mb-4",
+                isAppRoute && "pb-0 md:pb-5"
+              )}
+            >
+              <div className="w-12 h-1 bg-border-main/20 rounded-full mx-auto mb-4 md:hidden" />
 
-            <div className="flex items-center gap-4 mb-6 border-b border-border-main/10 pb-4">
-              <div className="w-14 h-14 rounded overflow-hidden flex-shrink-0">
-                <SongImage src={optionsSong.thumbnail || optionsSong.cover} alt={optionsSong.title} className="w-full h-full object-cover" />
-              </div>
-              <div className="min-w-0 pr-4 flex-1">
-                <p className="text-base font-bold text-text-primary truncate">{optionsSong.title}</p>
-                <p className="text-sm text-text-secondary truncate">
-                  <ArtistLinks
-                    artist={optionsSong.artist}
-                    onArtistClick={(artistName) => {
-                      setOptionsSong(null);
-                      navigateToArtist(artistName);
-                    }}
-                  />
-                </p>
-              </div>
-              <button className="w-8 h-8 rounded-full bg-bg-surface/50 border border-border-main/10 flex items-center justify-center flex-shrink-0" onClick={() => setOptionsSong(null)}>
-                <X className="w-5 h-5 text-text-primary" />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto max-h-[60vh] pb-2 space-y-1">
-              {[
-                { id: 'playNext', icon: ListPlus, label: 'Play next' },
-                { id: 'addToQueue', icon: ListMusic, label: 'Add to queue' },
-                { id: 'saveLibrary', icon: PlusCircle, label: 'Save to library' },
-                { id: 'like', icon: Heart, label: 'Add to liked songs' },
-                { id: 'equalizer', icon: Sliders, label: 'Audio Studio & Equalizer' },
-                { id: 'share', icon: Share2, label: 'Share' },
-                { id: 'saveOffline', icon: HardDrive, label: isTrackOffline(optionsSong?.id) ? 'Saved offline ✓' : 'Save for offline' },
-                { id: 'download', icon: Download, label: 'Download' },
-                { id: 'savePlaylist', icon: FolderPlus, label: 'Save to playlist' },
-                { id: 'album', icon: Disc, label: 'Go to album' },
-                { id: 'artist', icon: User, label: 'Go to artist' },
-                { id: 'credits', icon: Info, label: 'View song credits' }
-              ].map((opt, i) => (
-                <button
-                  key={i}
-                  className="w-full flex items-center gap-4 p-3 hover:bg-bg-surface/80 rounded-xl transition-colors text-left"
-                  onClick={async () => {
-                    if (opt.id === 'credits') {
-                      setIsFullScreen(true);
-                      if (isDesktop) {
-                        setActiveTab('credits');
-                      } else {
-                        setIsTabCollapsed(false);
-                        setActiveTab('lyrics');
-                        setLyricsSubTab('credits');
-                      }
-                      setOptionsSong(null);
-                    } else if (opt.id === 'equalizer') {
-                      setAudioStudioTab('eq');
-                      setIsAudioStudioOpen(true);
-                      setOptionsSong(null);
-                    } else if (opt.id === 'share') {
-                      const shareUrl = `${window.location.origin}/app/library?filter=Tracks&trackId=${encodeURIComponent(optionsSong.id)}`;
-                      if (navigator.share) {
-                        navigator.share({
-                          title: optionsSong.title,
-                          text: `Listen to ${optionsSong.title} by ${optionsSong.artist}`,
-                          url: shareUrl
-                        }).catch(console.error);
-                      } else {
-                        navigator.clipboard.writeText(shareUrl);
-                        handleOptionClick('Link copied to clipboard');
-                      }
-                    } else if (opt.id === 'saveOffline') {
-                      if (isTrackOffline(optionsSong.id)) {
-                        await removeTrackOffline(optionsSong.id);
-                        showToast(`Removed "${optionsSong.title}" from offline storage`);
+              <div className="flex items-center gap-4 mb-4 md:mb-6 border-b border-border-main/10 pb-4 shrink-0">
+                <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 shadow-md">
+                  <SongImage src={optionsSong.thumbnail || optionsSong.cover} alt={optionsSong.title} className="w-full h-full object-cover" />
+                </div>
+                <div className="min-w-0 pr-2 flex-1">
+                  <p className="text-base font-bold text-text-primary truncate">{optionsSong.title}</p>
+                  <p className="text-sm text-text-secondary truncate mt-0.5">
+                    <ArtistLinks
+                      artist={optionsSong.artist}
+                      onArtistClick={(artistName) => {
                         setOptionsSong(null);
-                        return;
-                      }
-                      showToast(`Saving "${optionsSong.title}" for offline...`);
-                      setOptionsSong(null);
-                      try {
-                        const songToSave = { ...optionsSong, url: optionsSong.streamUrl || optionsSong.driveUrl };
-                        await saveTrackOffline(songToSave, (pct) => setOfflineProgress(pct));
-                        setOfflineProgress(null);
-                        showToast(`"${optionsSong.title}" saved for offline playback ✓`);
-                      } catch (err) {
-                        setOfflineProgress(null);
-                        showToast(`Failed to save offline: ${err.message}`);
-                      }
-                    } else if (opt.id === 'download') {
-                      window.open(optionsSong.driveUrl, '_blank');
-                      handleOptionClick(`Downloading ${optionsSong.title}...`);
-                    } else if (opt.id === 'savePlaylist') {
-                      setIsPlaylistPickerOpen(true);
-                    } else if (opt.id === 'like') {
-                      toggleLike(optionsSong);
-                      setOptionsSong(null);
-                    } else if (opt.id === 'artist') {
-                      navigateToArtist(optionsSong.artist);
-                      setOptionsSong(null);
-                    } else if (opt.id === 'album') {
-                      navigate(`/app/library?filter=Albums&album=${encodeURIComponent(optionsSong.album)}`);
-                      setOptionsSong(null);
-                    } else {
-                      handleOptionClick(`${opt.label} functionality coming soon`);
-                    }
-                  }}
+                        navigateToArtist(artistName);
+                      }}
+                      truncate
+                    />
+                  </p>
+                </div>
+                <button
+                  className="w-8 h-8 rounded-full bg-bg-surface/50 hover:bg-bg-surface border border-border-main/10 flex items-center justify-center flex-shrink-0 transition-colors"
+                  onClick={() => setOptionsSong(null)}
+                  aria-label="Close options"
                 >
-                  <opt.icon className={cn(
-                    "w-6 h-6",
-                    opt.id === 'like' && likedSongs.includes(optionsSong.id) ? "text-primary fill-current" : "text-text-secondary"
-                  )} />
-                  <span className="text-base text-text-primary">
-                    {opt.id === 'like' && likedSongs.includes(optionsSong.id) ? 'Remove from liked' : opt.label}
-                  </span>
+                  <X className="w-5 h-5 text-text-primary" />
                 </button>
-              ))}
-            </div>
+              </div>
+
+              <div className="overflow-y-auto max-h-[60vh] md:max-h-none md:flex-1 pb-2 space-y-1 custom-scrollbar">
+                {[
+                  { id: 'playNext', icon: ListPlus, label: 'Play next' },
+                  { id: 'addToQueue', icon: ListMusic, label: 'Add to queue' },
+                  { id: 'saveLibrary', icon: PlusCircle, label: 'Save to library' },
+                  { id: 'like', icon: Heart, label: 'Add to liked songs' },
+                  { id: 'equalizer', icon: Sliders, label: 'Audio Studio & Equalizer' },
+                  { id: 'share', icon: Share2, label: 'Share' },
+                  { id: 'saveOffline', icon: HardDrive, label: isTrackOffline(optionsSong?.id) ? 'Saved offline ✓' : 'Save for offline' },
+                  { id: 'download', icon: Download, label: 'Download' },
+                  { id: 'savePlaylist', icon: FolderPlus, label: 'Save to playlist' },
+                  { id: 'album', icon: Disc, label: 'Go to album' },
+                  { id: 'artist', icon: User, label: 'Go to artist' },
+                  { id: 'credits', icon: Info, label: 'View song credits' }
+                ].map((opt, i) => (
+                  <button
+                    key={i}
+                    className="w-full flex items-center gap-3.5 p-3 hover:bg-border-main/10 rounded-xl transition-colors text-left"
+                    onClick={async () => {
+                      if (opt.id === 'credits') {
+                        setIsFullScreen(true);
+                        if (isDesktop) {
+                          setActiveTab('credits');
+                        } else {
+                          setIsTabCollapsed(false);
+                          setActiveTab('lyrics');
+                          setLyricsSubTab('credits');
+                        }
+                        setOptionsSong(null);
+                      } else if (opt.id === 'equalizer') {
+                        setAudioStudioTab('eq');
+                        setIsAudioStudioOpen(true);
+                        setOptionsSong(null);
+                      } else if (opt.id === 'share') {
+                        const shareUrl = `${window.location.origin}/app/library?filter=Tracks&trackId=${encodeURIComponent(optionsSong.id)}`;
+                        if (navigator.share) {
+                          navigator.share({
+                            title: optionsSong.title,
+                            text: `Listen to ${optionsSong.title} by ${optionsSong.artist}`,
+                            url: shareUrl
+                          }).catch(console.error);
+                        } else {
+                          navigator.clipboard.writeText(shareUrl);
+                          handleOptionClick('Link copied to clipboard');
+                        }
+                      } else if (opt.id === 'saveOffline') {
+                        if (isTrackOffline(optionsSong.id)) {
+                          await removeTrackOffline(optionsSong.id);
+                          showToast(`Removed "${optionsSong.title}" from offline storage`);
+                          setOptionsSong(null);
+                          return;
+                        }
+                        showToast(`Saving "${optionsSong.title}" for offline...`);
+                        setOptionsSong(null);
+                        try {
+                          const songToSave = { ...optionsSong, url: optionsSong.streamUrl || optionsSong.driveUrl };
+                          await saveTrackOffline(songToSave, (pct) => setOfflineProgress(pct));
+                          setOfflineProgress(null);
+                          showToast(`"${optionsSong.title}" saved for offline playback ✓`);
+                        } catch (err) {
+                          setOfflineProgress(null);
+                          showToast(`Failed to save offline: ${err.message}`);
+                        }
+                      } else if (opt.id === 'download') {
+                        window.open(optionsSong.driveUrl, '_blank');
+                        handleOptionClick(`Downloading ${optionsSong.title}...`);
+                      } else if (opt.id === 'savePlaylist') {
+                        setIsPlaylistPickerOpen(true);
+                      } else if (opt.id === 'like') {
+                        toggleLike(optionsSong);
+                        setOptionsSong(null);
+                      } else if (opt.id === 'artist') {
+                        navigateToArtist(optionsSong.artist);
+                        setOptionsSong(null);
+                      } else if (opt.id === 'album') {
+                        navigate(`/app/library?filter=Albums&album=${encodeURIComponent(optionsSong.album)}`);
+                        setOptionsSong(null);
+                      } else {
+                        handleOptionClick(`${opt.label} functionality coming soon`);
+                      }
+                    }}
+                  >
+                    <opt.icon className={cn(
+                      "w-5 h-5 shrink-0",
+                      opt.id === 'like' && likedSongs.includes(optionsSong.id) ? "text-primary fill-current" : "text-text-secondary"
+                    )} />
+                    <span className="text-sm md:text-[15px] font-medium text-text-primary truncate">
+                      {opt.id === 'like' && likedSongs.includes(optionsSong.id) ? 'Remove from liked' : opt.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isPlaylistPickerOpen && (
