@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import MusicPlayer from './MusicPlayer';
 import { MoreHorizontal, Play, X, List, Plus, Music2, FolderPlus, Loader2, Sun, Moon, Menu, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePlaylists } from '../context/PlaylistContext';
 import { useTheme } from '../context/ThemeContext';
 import SongImage from './SongImage';
+import DesktopHeaderSearch from './DesktopHeaderSearch';
 import logoImg from '../assets/logo.png';
 
 const Layout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { playlists, createPlaylist, loading: playlistsLoading } = usePlaylists();
   const { theme, toggleTheme } = useTheme();
@@ -49,6 +51,7 @@ const Layout = () => {
 
           <header className="hidden md:flex sticky top-0 h-16 items-center justify-between px-8 z-40 bg-white/90 dark:bg-[#121212]/90 backdrop-blur-md border-b border-black/5 dark:border-white/5">
              <div className="flex-1 max-w-xl mr-6 flex items-center" id="header-search-portal">
+                {!location.pathname.startsWith('/app/online') && <DesktopHeaderSearch />}
              </div>
              <div className="flex items-center gap-3 md:gap-4 shrink-0">
                 {!showRightSidebar && (

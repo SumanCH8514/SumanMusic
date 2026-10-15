@@ -1,7 +1,6 @@
-const CACHE_VERSION = 'sumanmusic-v3';
+const CACHE_VERSION = 'sumanmusic-v4';
 
 const precacheManifest = self.__WB_MANIFEST || [];
-
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -15,7 +14,6 @@ self.addEventListener('install', event => {
   );
 });
 
-
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -24,9 +22,6 @@ self.addEventListener('activate', event => {
   );
   self.clients.claim();
 });
-
-
-
 
 const skipPatterns = [
   /^\/__vite/,
@@ -50,36 +45,41 @@ self.addEventListener('fetch', event => {
 
   const isNavigation = event.request.mode === 'navigate';
 
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
+        .then(networkRes => {
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE_VERSION).then(c => c.put(event.request, clone));
+          }
+          return networkRes;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const fallback = await caches.match('/index.html');
+          return fallback || new Response('<!DOCTYPE html><html><body><p>You are offline.</p></body></html>', {
+            status: 503,
+            headers: { 'Content-Type': 'text/html' },
+          });
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(cached => {
-      const fetchPromise = fetch(event.request).then(networkRes => {
+      if (cached) return cached;
+
+      return fetch(event.request).then(networkRes => {
         if (networkRes && networkRes.status === 200) {
           const clone = networkRes.clone();
           caches.open(CACHE_VERSION).then(c => c.put(event.request, clone));
         }
         return networkRes;
-      }).catch(() => cached);
-
-
-      if (isNavigation) {
-        return cached || fetchPromise;
-      }
-
-
-      if (isExternalApi) {
-        return cached || fetchPromise;
-      }
-
-
-      return cached || fetchPromise;
-    }).catch(async () => {
-      if (isNavigation) {
-        const fallback = await caches.match('/index.html');
-        return fallback || new Response('<!DOCTYPE html><html><body><p>You are offline.</p></body></html>', {
-          status: 503,
-          headers: { 'Content-Type': 'text/html' },
-        });
-      }
+      });
+    }).catch(() => {
       return new Response('', { status: 503, statusText: 'Offline' });
     })
   );

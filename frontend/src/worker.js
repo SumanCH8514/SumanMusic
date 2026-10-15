@@ -148,6 +148,20 @@ export default {
       }
     }
 
+    if (pathname.startsWith('/assets/')) {
+      const assetRes = await env.ASSETS.fetch(request);
+      if (!assetRes.ok || assetRes.headers.get('content-type')?.includes('text/html')) {
+        return new Response('Asset not found', {
+          status: 404,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Cache-Control': 'no-store'
+          }
+        });
+      }
+      return assetRes;
+    }
+
     return env.ASSETS.fetch(request);
   }
 };

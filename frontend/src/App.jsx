@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import {
   createBrowserRouter,
   RouterProvider,
   Navigate,
-  Outlet
+  Outlet,
+  useLocation
 } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PlayerProvider } from './context/PlayerContext';
@@ -20,29 +21,49 @@ import { ToastProvider } from './context/ToastContext';
 import { GDriveProvider } from './context/GDriveContext';
 
 
-const Home = lazy(() => import('./views/Home'));
-const Search = lazy(() => import('./views/Search'));
-const Library = lazy(() => import('./views/Library'));
-const OnlineLibrary = lazy(() => import('./views/OnlineLibrary'));
-const DriveSource = lazy(() => import('./views/DriveSource'));
-const LandingPage = lazy(() => import('./views/LandingPage'));
-const Profile = lazy(() => import('./views/Profile'));
-const AdminPanel = lazy(() => import('./views/AdminPanel'));
-const Artists = lazy(() => import('./views/Artists'));
-const PrivacyPolicy = lazy(() => import('./views/PrivacyPolicy'));
-const TermsOfService = lazy(() => import('./views/TermsOfService'));
-const AboutUs = lazy(() => import('./views/AboutUs'));
-const ContactUs = lazy(() => import('./views/ContactUs'));
-const SharePlay = lazy(() => import('./views/SharePlay'));
+const lazyWithRetry = (componentImport) =>
+  lazy(async () => {
+    const key = 'chunk_reload_retry_' + window.location.pathname;
+    const hasRetried = sessionStorage.getItem(key) === 'true';
+    try {
+      const component = await componentImport();
+      sessionStorage.removeItem(key);
+      return component;
+    } catch (error) {
+      const isChunkError =
+        error?.message?.includes('Failed to fetch dynamically imported module') ||
+        error?.message?.includes('Importing a module script failed') ||
+        error?.name === 'ChunkLoadError';
+
+      if (isChunkError && !hasRetried) {
+        sessionStorage.setItem(key, 'true');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
+
+const Home = lazyWithRetry(() => import('./views/Home'));
+const Search = lazyWithRetry(() => import('./views/Search'));
+const Library = lazyWithRetry(() => import('./views/Library'));
+const OnlineLibrary = lazyWithRetry(() => import('./views/OnlineLibrary'));
+const DriveSource = lazyWithRetry(() => import('./views/DriveSource'));
+const LandingPage = lazyWithRetry(() => import('./views/LandingPage'));
+const Profile = lazyWithRetry(() => import('./views/Profile'));
+const AdminPanel = lazyWithRetry(() => import('./views/AdminPanel'));
+const Artists = lazyWithRetry(() => import('./views/Artists'));
+const PrivacyPolicy = lazyWithRetry(() => import('./views/PrivacyPolicy'));
+const TermsOfService = lazyWithRetry(() => import('./views/TermsOfService'));
+const AboutUs = lazyWithRetry(() => import('./views/AboutUs'));
+const ContactUs = lazyWithRetry(() => import('./views/ContactUs'));
+const SharePlay = lazyWithRetry(() => import('./views/SharePlay'));
 
 const PageLoader = () => (
   <div className="h-[60vh] w-full flex items-center justify-center">
     <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-lg shadow-primary/20" />
   </div>
 );
-
-import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 
 const RootLayout = () => {
   const location = useLocation();

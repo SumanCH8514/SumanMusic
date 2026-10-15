@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Search as SearchIcon, Mic, Play, MoreVertical,
   Music, Zap, Heart, Sparkles, Globe,
   Headphones, Drum, Radio, Tv, Gamepad2,
-  PartyPopper, Dumbbell, Moon, Target, Mic2
+  PartyPopper, Dumbbell, Moon, Target, Mic2,
+  ChevronRight
 } from 'lucide-react';
 import { usePlayer } from '../context/usePlayer';
 import { cn } from '../lib/utils';
@@ -14,6 +15,7 @@ import { useSettings } from '../context/SettingsContext';
 import { SongCardSkeleton } from '../components/Skeleton';
 
 const Search = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const [isListening, setIsListening] = useState(false);
@@ -124,35 +126,78 @@ const Search = () => {
               ))}
             </div>
           ) : filteredSongs.length > 0 ? (
-            filteredSongs.map((song) => (
-              <div
-                key={song.id}
-                className="flex items-center gap-4 group cursor-pointer"
-                onClick={() => playSong(song)}
-              >
-                <div className="w-12 h-12 rounded overflow-hidden bg-bg-surface shadow-lg relative border border-border-main/5">
-                  <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover" />
-                  {currentSong?.id === song.id && isPlaying && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <Play className="w-5 h-5 text-primary fill-current" />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {filteredSongs.map((song) => (
+                  <div
+                    key={song.id}
+                    className="flex items-center gap-4 group cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors"
+                    onClick={() => playSong(song)}
+                  >
+                    <div className="w-12 h-12 rounded overflow-hidden bg-bg-surface shadow-lg relative border border-border-main/5 shrink-0">
+                      <SongImage src={song.thumbnail || song.cover} alt={song.title} className="w-full h-full object-cover" />
+                      {currentSong?.id === song.id && isPlaying && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <Play className="w-5 h-5 text-primary fill-current" />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0 py-1">
-                  <p className={cn("font-bold text-sm line-clamp-2 leading-tight", currentSong?.id === song.id ? "text-primary" : "text-text-primary")}>{song.title}</p>
-                  <p className="text-xs text-text-secondary truncate mt-0.5">{song.artist}</p>
-                </div>
-                <MoreVertical
-                  className="w-5 h-5 text-text-secondary hover:text-text-primary cursor-pointer transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOptionsSong(song);
-                  }}
-                />
+                    <div className="flex-1 min-w-0 py-1">
+                      <p className={cn("font-bold text-sm line-clamp-2 leading-tight", currentSong?.id === song.id ? "text-primary" : "text-text-primary")}>{song.title}</p>
+                      <p className="text-xs text-text-secondary truncate mt-0.5">{song.artist}</p>
+                    </div>
+                    <MoreVertical
+                      className="w-5 h-5 text-text-secondary hover:text-text-primary cursor-pointer transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOptionsSong(song);
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
-            ))
+
+              <div className="pt-3 border-t border-border-main/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <span className="text-xs text-text-secondary">Looking for more results?</span>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/app/online?q=${encodeURIComponent(query)}`)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer group"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Search in Online Library</span>
+                  <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+            </div>
           ) : (
-            <p className="text-text-secondary text-sm italic">No songs found for "{query}"</p>
+            <div className="py-8 sm:py-14 flex flex-col items-center justify-center text-center max-w-md mx-auto px-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="relative mb-5 flex items-center justify-center">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-primary/20 via-primary/10 to-transparent border border-primary/20 flex items-center justify-center shadow-xl shadow-primary/5">
+                  <Globe className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-bg-surface border border-border-main/20 flex items-center justify-center shadow-md text-text-secondary">
+                  <SearchIcon className="w-3.5 h-3.5" />
+                </div>
+              </div>
+
+              <h3 className="text-base sm:text-lg font-bold text-text-primary tracking-tight">
+                No songs found in your library
+              </h3>
+              <p className="text-xs sm:text-sm text-text-secondary mt-1.5 mb-6 leading-relaxed max-w-xs sm:max-w-sm">
+                Couldn't find <span className="font-semibold text-text-primary">"{query}"</span> in your Drive. Search the Online Library to explore millions of songs worldwide.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/app/online?q=${encodeURIComponent(query)}`)}
+                className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-full bg-primary hover:bg-primary/90 active:scale-95 text-black font-bold text-xs sm:text-sm shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] transition-all duration-200 cursor-pointer"
+              >
+                <Globe className="w-4 h-4 transition-transform group-hover:rotate-12" />
+                <span>Search in Online Library</span>
+                <ChevronRight className="w-4 h-4 text-black/80 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
           )}
         </div>
       ) : (

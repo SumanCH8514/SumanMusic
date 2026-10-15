@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ArrowLeft, X, Sparkles, Mic,
@@ -418,6 +419,8 @@ const OnlineLibrary = () => {
   const { youtubeAccessToken } = useAuth();
   const { playSong, playQueue, currentSong, isPlaying, recentlyPlayed = [] } = usePlayer();
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQ = searchParams.get('q') || searchParams.get('search') || '';
 
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem('suman_music_online_view_mode');
@@ -430,10 +433,11 @@ const OnlineLibrary = () => {
     localStorage.setItem('suman_music_online_view_mode', mode);
   };
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => urlQ);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
+  const lastSearchedQ = useRef('');
 
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [isLoadingFeeds, setIsLoadingFeeds] = useState(true);
@@ -561,8 +565,8 @@ const OnlineLibrary = () => {
     }
   });
 
-  const handleSearch = async (queryText) => {
-    const q = (queryText !== undefined ? queryText : searchQuery).trim();
+  const performSearch = useCallback(async (queryText) => {
+    const q = (queryText || '').trim();
     if (!q) return;
 
     setIsSearching(true);
@@ -572,6 +576,7 @@ const OnlineLibrary = () => {
       const results = await fetchYouTubeCategory(q, 30);
       if (results && results.length > 0) {
         setSearchResults(results);
+        setSearchError(null);
       } else {
         setSearchError(`No songs found for "${q}"`);
         setSearchResults([]);
@@ -582,12 +587,35 @@ const OnlineLibrary = () => {
     } finally {
       setIsSearching(false);
     }
+  }, []);
+
+  const handleSearch = (queryText) => {
+    const q = (queryText !== undefined ? queryText : searchQuery).trim();
+    if (!q) return;
+    lastSearchedQ.current = q;
+    setSearchParams({ q }, { replace: true });
+    performSearch(q);
   };
+
+  useEffect(() => {
+    const q = (urlQ || '').trim();
+    if (q && q !== lastSearchedQ.current) {
+      lastSearchedQ.current = q;
+      queueMicrotask(() => {
+        setSearchQuery(q);
+      });
+      performSearch(q);
+    }
+  }, [urlQ, performSearch]);
 
   const clearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
     setSearchError(null);
+    lastSearchedQ.current = '';
+    if (searchParams.get('q') || searchParams.get('search')) {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const currentCategoryObj = useMemo(() => {
