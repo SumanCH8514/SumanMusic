@@ -304,6 +304,7 @@ export const PlayerProvider = ({ children }) => {
     return () => window.removeEventListener('sumanmusic-catalog-updated', handleCatalogUpdate);
   }, []);
 
+  const isInitialMountRef = useRef(true);
   const hasRestoredInitialRef = useRef(false);
 
   useEffect(() => {
@@ -320,8 +321,9 @@ export const PlayerProvider = ({ children }) => {
       } catch {}
     }
 
-    if (initialSong && !urlSongId) {
+    if (initialSong && (!urlSongId || initialSong.id === urlSongId)) {
       hasRestoredInitialRef.current = true;
+      if (urlSongId) handledUrlSongIdRef.current = urlSongId;
       setCurrentSong(initialSong);
       setSource(
         initialSong.url || initialSong.streamUrl || initialSong.driveUrl,
@@ -330,6 +332,9 @@ export const PlayerProvider = ({ children }) => {
         false,
         savedTime
       );
+      if (urlSongId) {
+        setIsFullScreenInternal(true);
+      }
     }
   }, [setSource, searchParams]);
 
@@ -343,6 +348,11 @@ export const PlayerProvider = ({ children }) => {
     }
 
     if (handledUrlSongIdRef.current === urlSongId) return;
+
+    const isInitial = isInitialMountRef.current;
+    if (isInitial) {
+      isInitialMountRef.current = false;
+    }
 
     if (currentSong?.id === urlSongId) {
       handledUrlSongIdRef.current = urlSongId;
@@ -366,19 +376,27 @@ export const PlayerProvider = ({ children }) => {
 
       if (targetSong) {
         handledUrlSongIdRef.current = urlSongId;
+        hasRestoredInitialRef.current = true;
         setCurrentSong(targetSong);
         setIsFullScreenInternal(true);
+        const shouldAutoPlay = !isInitial;
+        const savedTime = isInitial ? parseFloat(localStorage.getItem('suman_music_last_time') || '0') : 0;
         setSource(
           targetSong.url || targetSong.streamUrl || targetSong.driveUrl,
           targetSong.isYouTube ? (targetSong.videoId || String(targetSong.id).replace('yt_', '')) : null,
           targetSong,
-          true
+          shouldAutoPlay,
+          savedTime
         );
       }
     };
 
     loadUrlTrack();
   }, [searchParams, songs, currentSong?.id, setSource]);
+
+  useEffect(() => {
+    isInitialMountRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (!currentSong?.id || songs.length === 0 || currentSong.isYouTube) return;
@@ -449,7 +467,7 @@ export const PlayerProvider = ({ children }) => {
     };
   }, [loadSongs]);
 
-  const playSong = useCallback((song, openFullscreen = false) => {
+  const playSong = useCallback((song, openFullscreen = false, autoPlay = true) => {
     if (!song) return;
     setCurrentSong(song);
     try {
@@ -466,7 +484,7 @@ export const PlayerProvider = ({ children }) => {
 
     }
     setQueue(prev => prev.some(s => s && s.id === song.id) ? prev : [song, ...prev]); 
-    setSource(song.url, song.isYouTube ? (song.videoId || String(song.id).replace(/^yt_/, '')) : null, song, true);
+    setSource(song.url, song.isYouTube ? (song.videoId || String(song.id).replace(/^yt_/, '')) : null, song, autoPlay);
     if (openFullscreen) {
       setIsFullScreenInternal(true);
     }

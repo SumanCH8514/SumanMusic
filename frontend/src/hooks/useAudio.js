@@ -66,6 +66,7 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
   const isUsingIframeRef = useRef(false);
   const isYouTubeStreamRef = useRef(false);
   const currentVideoIdRef = useRef(null);
+  const requestedAutoPlayRef = useRef(false);
 
   const [soundBoost, setSoundBoostState] = useState(() => {
     const saved = localStorage.getItem('suman_music_sound_boost');
@@ -356,17 +357,22 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
     setLoadRequested(true);
   }, []);
 
-  const fallbackToIframe = useCallback((cleanId) => {
+  const fallbackToIframe = useCallback((cleanId, shouldAutoPlay = false, initialTime = 0) => {
     if (!cleanId) return;
     isUsingIframeRef.current = true;
     isYouTubeStreamRef.current = false;
     initYouTube();
     audioRef.current.pause();
     audioRef.current.src = '';
+    const startSec = initialTime > 0 && !isNaN(initialTime) ? initialTime : 0;
     const loadVideo = () => {
-      if (ytPlayerRef.current?.loadVideoById) {
+      if (shouldAutoPlay && ytPlayerRef.current?.loadVideoById) {
         setIsBuffering(true);
-        ytPlayerRef.current.loadVideoById({ videoId: cleanId });
+        ytPlayerRef.current.loadVideoById({ videoId: cleanId, startSeconds: startSec });
+        return true;
+      } else if (!shouldAutoPlay && ytPlayerRef.current?.cueVideoById) {
+        setIsBuffering(false);
+        ytPlayerRef.current.cueVideoById({ videoId: cleanId, startSeconds: startSec });
         return true;
       }
       return false;
@@ -533,6 +539,7 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
   }, [startAudioContextKeepAlive, setupBoosterGraph, volume, crossfade, soundBoost]);
 
   const setSource = useCallback((url, videoId = null, songMeta = null, autoPlay = false, initialTime = 0) => {
+    requestedAutoPlayRef.current = Boolean(autoPlay);
     if (pendingCheckInterval.current) {
       clearInterval(pendingCheckInterval.current);
       pendingCheckInterval.current = null;
@@ -553,54 +560,15 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
     currentVideoIdRef.current = cleanVideoId;
 
     if (targetIsYouTube) {
-      isUsingIframeRef.current = false;
-      isYouTubeStreamRef.current = true;
-      setIsBuffering(true);
-
-      initYouTube();
-
+      isUsingIframeRef.current = true;
+      isYouTubeStreamRef.current = false;
       silentAudioRef.current?.pause();
-      if (ytPlayerRef.current?.pauseVideo) {
-        ytPlayerRef.current.pauseVideo();
-      }
-
-      const streamUrl = `${ENV.BACKEND_URL}/api/youtube/stream?videoId=${cleanVideoId}`;
-
-      const applyInitial = () => {
-        if (initialTime > 0 && !isNaN(initialTime)) {
-          try {
-            audioRef.current.currentTime = initialTime;
-            setCurrentTime(initialTime);
-            const currentDuration = audioRef.current.duration || songMeta?.duration || 0;
-            if (currentDuration > 0) {
-              setDuration(currentDuration);
-              setProgress(Math.min(100, (initialTime / currentDuration) * 100));
-            }
-          } catch {}
-        }
-      };
-
-      if (audioRef.current.src !== streamUrl) {
-        if (initialTime > 0) {
-          audioRef.current.addEventListener('loadedmetadata', applyInitial, { once: true });
-          audioRef.current.addEventListener('canplay', applyInitial, { once: true });
-        }
-        audioRef.current.src = streamUrl;
-      } else {
-        if (initialTime > 0) {
-          audioRef.current.currentTime = initialTime;
-          setCurrentTime(initialTime);
-        } else {
-          audioRef.current.currentTime = 0;
-        }
-      }
-
-      if (autoPlay) {
-        play();
-      }
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      fallbackToIframe(cleanVideoId, autoPlay, initialTime);
     } else {
       isUsingIframeRef.current = false;
-      isYouTubeStreamRef.current = targetIsYouTube;
+      isYouTubeStreamRef.current = false;
       silentAudioRef.current?.pause();
       if (ytPlayerRef.current?.pauseVideo) {
         ytPlayerRef.current.pauseVideo();
@@ -609,9 +577,7 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
       const songId = songMeta?.id;
       const setupNativeAudio = async () => {
         let streamUrl = url;
-        if (targetIsYouTube && cleanVideoId) {
-          streamUrl = `${ENV.BACKEND_URL}/api/youtube/stream?videoId=${cleanVideoId}`;
-        } else if (songId) {
+        if (songId) {
           try {
             const offlineUrl = await getOfflineAudioUrl(songId);
             if (offlineUrl) {
@@ -659,7 +625,7 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
 
       setupNativeAudio();
     }
-  }, [initYouTube, play]);
+  }, [fallbackToIframe, play]);
 
   const pause = useCallback(() => {
     silentAudioRef.current?.pause();
@@ -745,7 +711,7 @@ export const useAudio = (playerEngineProp = 'youtubei') => {
       setIsBuffering(false);
       setIsPlaying(false);
       if (isYouTubeStreamRef.current && currentVideoIdRef.current) {
-        fallbackToIframe(currentVideoIdRef.current);
+        fallbackToIframe(currentVideoIdRef.current, requestedAutoPlayRef.current);
         return;
       }
       window.dispatchEvent(new CustomEvent('gdrive-key-failover'));

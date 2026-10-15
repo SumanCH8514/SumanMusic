@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Heart, Play, Pause, Clock, MoreHorizontal, ListMusic, LayoutGrid, List, Music2, Trash2, Music, Globe, Lock, Share2, PlayCircle, ArrowLeft, Square, EyeOff, Loader2, HardDrive, RotateCw } from 'lucide-react';
 import { usePlayer } from '../context/usePlayer';
 import { useAuth } from '../context/AuthContext';
-import { cn } from '../lib/utils';
+import { cn, getShareUrl } from '../lib/utils';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePlaylists } from '../context/PlaylistContext';
 import PlayingVisualizer from '../components/PlayingVisualizer';
@@ -367,7 +367,7 @@ const Library = () => {
     if (trackIdParam && filter === 'Tracks') {
       const song = songs.find(s => s.id === trackIdParam);
       if (song && currentSong?.id !== song.id) {
-        playSong(song);
+        playSong(song, false, false);
         showToast("Shared song loaded! Tap play to start listening.");
       }
     }
@@ -1163,13 +1163,13 @@ const Library = () => {
                 <button 
                   className="w-full flex items-center gap-4 p-4 hover:bg-white/5 rounded-2xl transition-all"
                   onClick={() => {
-                    let shareUrl = window.location.href;
+                    let shareUrl = getShareUrl();
                     if (selectedPlaylist) {
-                      shareUrl = `${window.location.origin}${window.location.pathname}?filter=Playlists&name=${encodeURIComponent(selectedPlaylist.name)}`;
+                      shareUrl = getShareUrl(`${window.location.pathname}?filter=Playlists&name=${encodeURIComponent(selectedPlaylist.name)}`);
                     } else if (selectedAlbum) {
-                      shareUrl = `${window.location.origin}${window.location.pathname}?filter=Albums&album=${encodeURIComponent(selectedAlbum.name)}`;
+                      shareUrl = getShareUrl(`${window.location.pathname}?filter=Albums&album=${encodeURIComponent(selectedAlbum.name)}`);
                     } else if (selectedArtist) {
-                      shareUrl = `${window.location.origin}${window.location.pathname}?filter=Artists&artist=${encodeURIComponent(selectedArtist.name)}`;
+                      shareUrl = getShareUrl(`${window.location.pathname}?filter=Artists&artist=${encodeURIComponent(selectedArtist.name)}`);
                     }
 
                     const shareData = {

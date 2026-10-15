@@ -11,7 +11,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { usePlayer, usePlayerProgress } from '../context/usePlayer';
 import { usePlaylists } from '../context/PlaylistContext';
 import { useAuth } from '../context/AuthContext';
-import { cn } from '../lib/utils';
+import { cn, getShareUrl } from '../lib/utils';
 import PlayingVisualizer from './PlayingVisualizer';
 import SpectrumVisualizer from './SpectrumVisualizer';
 import SongImage from './SongImage';
@@ -1107,7 +1107,7 @@ const DesktopLyricsTab = memo(({
   lyrics, isLyricsLoading, duration, seek, isAutoScrollEnabled, setIsAutoScrollEnabled,
   currentSong, lyricsOffset, onChangeOffset, lyricsSource, onChangeSource,
   onReloadLyrics, isLyricsReloading, isTranslating, isTranslationLoading,
-  translations, onToggleTranslation, translationMode = 'en', onChangeTranslationMode,
+  translations, onToggleTranslation, translationMode = 'rom', onChangeTranslationMode,
   lyricsStyle = 'rhythmic', onChangeStyle, lyricsColor = '#ffffff', onChangeColor
 }) => {
   const { currentTime } = usePlayerProgress();
@@ -1370,9 +1370,11 @@ const MusicPlayer = () => {
   const [isTranslationLoading, setIsTranslationLoading] = useState(false);
   const [translationMode, setTranslationMode] = useState(() => {
     try {
-      return localStorage.getItem('sumanmusic_translation_mode') || 'en';
+      const v2 = localStorage.getItem('sumanmusic_translation_mode_v2');
+      if (v2) return v2;
+      return 'rom';
     } catch {
-      return 'en';
+      return 'rom';
     }
   });
   const [translationsCache, setTranslationsCache] = useState({});
@@ -1431,16 +1433,17 @@ const MusicPlayer = () => {
     const linesToTranslate = targetLyrics || activeLyrics;
     if (!linesToTranslate || linesToTranslate.length === 0) return;
     const songId = currentSong?.id || currentSong?.title || 'active';
-    const songKey = `${songId}_${mode}`;
+    const effectiveMode = mode || 'rom';
+    const songKey = `${songId}_${effectiveMode}`;
     if (translationsCache[songKey]) {
       setTranslations(translationsCache[songKey]);
       return;
     }
     setIsTranslationLoading(true);
     try {
-      const targetLang = mode === 'rom' ? 'en' : mode;
-      const transResult = await fetchTranslations(linesToTranslate, targetLang, mode);
-      const activeList = mode === 'rom' ? transResult.romanized : transResult.translations;
+      const targetLang = effectiveMode === 'rom' ? 'en' : effectiveMode;
+      const transResult = await fetchTranslations(linesToTranslate, targetLang, effectiveMode);
+      const activeList = effectiveMode === 'rom' ? transResult.romanized : transResult.translations;
       const finalTrans = activeList && activeList.length > 0 ? activeList : transResult;
       setTranslationsCache((prev) => ({
         ...prev,
@@ -1472,6 +1475,7 @@ const MusicPlayer = () => {
     }
     setTranslationMode(newMode);
     try {
+      localStorage.setItem('sumanmusic_translation_mode_v2', newMode);
       localStorage.setItem('sumanmusic_translation_mode', newMode);
     } catch {}
     setIsTranslating(true);
@@ -2582,7 +2586,7 @@ const MusicPlayer = () => {
                       } else if (opt.id === 'share') {
                         const songId = optionsSong.id || optionsSong.videoId;
                         const cleanId = String(songId).trim();
-                        const shareUrl = `${window.location.origin}/share/v=${encodeURIComponent(cleanId)}`;
+                        const shareUrl = getShareUrl(`/share/v=${encodeURIComponent(cleanId)}`);
                         if (navigator.share) {
                           navigator.share({
                             title: `${optionsSong.title} • ${optionsSong.artist} | SumanMusic`,

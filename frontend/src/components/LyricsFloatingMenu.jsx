@@ -131,18 +131,18 @@ export const LyricsFloatingMenu = memo(({
 
   const translationModes = [
     {
-      id: 'en',
-      label: 'English Translation',
-      badge: 'ENGLISH',
+      id: 'rom',
+      label: 'English Alphabet',
+      badge: 'CONVERTER',
       badgeStyle: 'bg-primary/20 text-primary border-primary/30',
-      desc: 'Line-by-line meaning in English'
+      desc: 'Phonetic English alphabet sing-along'
     },
     {
-      id: 'rom',
-      label: 'Romanized (Sing-Along)',
-      badge: 'PHONETIC',
+      id: 'en',
+      label: 'English Meaning',
+      badge: 'MEANING',
       badgeStyle: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-      desc: 'Phonetic English alphabet pronunciation'
+      desc: 'Line-by-line meaning in English'
     },
     {
       id: 'hi',
@@ -168,7 +168,7 @@ export const LyricsFloatingMenu = memo(({
   ];
 
   const currentTranslationLabel = isTranslating
-    ? (translationModes.find((t) => t.id === currentTranslationMode)?.label || 'English Translation')
+    ? (translationModes.find((t) => t.id === currentTranslationMode)?.label || 'English Alphabet (Romanized)')
     : 'Off';
 
   return (
@@ -586,7 +586,7 @@ export const LyricsFloatingMenu = memo(({
       )}>
         <button
           onClick={onToggleTranslation}
-          title={isTranslating ? "Hide translation" : "Translate lyrics"}
+          title={isTranslating ? "Hide translation" : "Translate lyrics (English Alphabet)"}
           className={cn(
             "transition-all active:scale-90 flex items-center justify-center",
             size === 'sm' ? "p-1.5 rounded-lg" : "p-2.5 rounded-xl",

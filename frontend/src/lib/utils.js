@@ -33,3 +33,41 @@ export async function fetchImageToBase64(url, size = 64) {
     return null;
   }
 }
+
+export function getShareBaseUrl() {
+  if (typeof window === 'undefined') return 'https://v1.songs.sumanonline.com';
+  const hostname = (window.location.hostname || '').toLowerCase();
+  const isLocal =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0' ||
+    hostname === '::1' ||
+    hostname.endsWith('.localhost') ||
+    hostname.startsWith('192.168.') ||
+    hostname.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+    hostname === 'v1.songs.sumanonline.com';
+
+  if (isLocal) {
+    return 'https://v1.songs.sumanonline.com';
+  }
+  return window.location.origin;
+}
+
+export function getShareUrl(pathOrUrl = '') {
+  const base = getShareBaseUrl();
+  if (!pathOrUrl) {
+    if (typeof window === 'undefined') return base;
+    return `${base}${window.location.pathname}${window.location.search}${window.location.hash}`;
+  }
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+    try {
+      const parsed = new URL(pathOrUrl);
+      return `${base}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+      return pathOrUrl;
+    }
+  }
+  const normalized = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
+  return `${base}${normalized}`;
+}

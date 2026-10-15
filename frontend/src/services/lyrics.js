@@ -456,6 +456,39 @@ export const fetchLyrics = async (artist, title, album = '', duration = 0, sourc
   return lyricsData && !lyricsData._notFound ? lyricsData : null;
 };
 
+const formatRomanizedLyric = (text, origText) => {
+  if (!text || typeof text !== 'string') return '';
+  let s = text.trim();
+  s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const charMap = {
+    'ḵ': 'k', 'Ḵ': 'K',
+    'ḥ': 'h', 'Ḥ': 'H',
+    'ṣ': 's', 'Ṣ': 'S',
+    'ḍ': 'd', 'Ḍ': 'D',
+    'ṭ': 't', 'Ṭ': 'T',
+    'ẓ': 'z', 'Ẓ': 'Z',
+    'ġ': 'gh', 'Ġ': 'Gh',
+    'ʿ': '', 'ʾ': '',
+    'ā': 'a', 'Ā': 'A',
+    'ī': 'i', 'Ī': 'I',
+    'ū': 'u', 'Ū': 'U',
+    'ē': 'e', 'Ē': 'E',
+    'ō': 'o', 'Ō': 'O'
+  };
+  s = s.replace(/[ḵḴḥḤṣṢḍḌṭṬẓẒġĠʿʾāĀīĪūŪēĒōŌ]/g, (m) => charMap[m] || m);
+  s = s.replace(/\bhay\b/gi, 'hai');
+  s = s.replace(/\bkask\b/gi, 'kasak');
+  s = s.replace(/\bqasm\b/gi, 'qasam');
+  s = s.replace(/\bqsm\b/gi, 'qasam');
+  s = s.replace(/\bbagichay\b/gi, 'bagichai');
+  s = s.replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (/[\u0980-\u09FF]/.test(origText || '')) {
+    return s.split(' ').map((w) => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' ');
+  }
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
 export const fetchTranslations = async (lines, target = 'en', mode = 'translation') => {
   if (!Array.isArray(lines) || lines.length === 0) {
     const empty = [];
@@ -496,17 +529,20 @@ export const fetchTranslations = async (lines, target = 'en', mode = 'translatio
         });
         const cleanRom = Array.isArray(data.romanized)
           ? data.romanized.map((r, idx) => {
-              const orig = (typeof lines[idx] === 'string' ? lines[idx] : lines[idx]?.text || '').trim().toLowerCase();
-              return (r || '').trim().toLowerCase() === orig ? '' : (r || '').trim();
+              const rawOrig = (typeof lines[idx] === 'string' ? lines[idx] : lines[idx]?.text || '').trim();
+              const formatted = formatRomanizedLyric(r || '', rawOrig);
+              return formatted.toLowerCase() === rawOrig.toLowerCase() ? '' : formatted;
             })
           : new Array(lines.length).fill('');
 
         const activeList = mode === 'rom' ? cleanRom : cleanTrans;
-        const result = [...activeList];
-        result.translations = cleanTrans;
-        result.romanized = cleanRom;
-        result.detectedLang = data.detectedLang || 'auto';
-        return result;
+        if (activeList.some(item => item && item.trim().length > 0)) {
+          const result = [...activeList];
+          result.translations = cleanTrans;
+          result.romanized = cleanRom;
+          result.detectedLang = data.detectedLang || 'auto';
+          return result;
+        }
       }
     }
   } catch {}
@@ -593,8 +629,9 @@ export const fetchTranslations = async (lines, target = 'en', mode = 'translatio
             if (sData?.[0]?.[0]?.[0]) {
               translationsMap[item.originalIndex] = sData[0][0][0].trim();
             }
-            if (sData?.[0]?.[1]?.[3]) {
-              romanizedMap[item.originalIndex] = sData[0][1][3].trim();
+            const romanTuple = sData?.[0]?.find((x) => Array.isArray(x) && typeof x[3] === 'string');
+            if (romanTuple?.[3]) {
+              romanizedMap[item.originalIndex] = romanTuple[3].trim();
             }
             if (sData?.[2]) detectedSourceLang = sData[2];
           }
@@ -607,11 +644,13 @@ export const fetchTranslations = async (lines, target = 'en', mode = 'translatio
   const finalRomanized = new Array(lines.length).fill('');
 
   for (let i = 0; i < lines.length; i++) {
-    const orig = (typeof lines[i] === 'string' ? lines[i] : lines[i]?.text || '').trim().toLowerCase();
+    const rawOrig = (typeof lines[i] === 'string' ? lines[i] : lines[i]?.text || '').trim();
+    const orig = rawOrig.toLowerCase();
     const t = translationsMap[i] || '';
-    const r = romanizedMap[i] || '';
+    const rawR = romanizedMap[i] || '';
+    const formattedR = rawR ? formatRomanizedLyric(rawR, rawOrig) : '';
     finalTranslations[i] = t.toLowerCase() === orig ? '' : t;
-    finalRomanized[i] = r.toLowerCase() === orig ? '' : r;
+    finalRomanized[i] = formattedR.toLowerCase() === orig ? '' : formattedR;
   }
 
   const activeList = mode === 'rom' ? finalRomanized : finalTranslations;

@@ -24,6 +24,7 @@ export default {
       pathname !== '/' &&
       pathname !== '/api/stream' &&
       pathname !== '/api/youtube/stream' &&
+      pathname !== '/api/track' &&
       url.searchParams.get('refresh') !== 'true';
 
     let edgeCache = null;
@@ -489,9 +490,41 @@ export default {
             return jsonResponse({ translations: new Array(lines.length).fill(''), romanized: new Array(lines.length).fill('') }, 200);
           }
 
+          const formatRomanizedLyric = (text, origText) => {
+            if (!text || typeof text !== 'string') return '';
+            let s = text.trim();
+            s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const charMap = {
+              'ḵ': 'k', 'Ḵ': 'K',
+              'ḥ': 'h', 'Ḥ': 'H',
+              'ṣ': 's', 'Ṣ': 'S',
+              'ḍ': 'd', 'Ḍ': 'D',
+              'ṭ': 't', 'Ṭ': 'T',
+              'ẓ': 'z', 'Ẓ': 'Z',
+              'ġ': 'gh', 'Ġ': 'Gh',
+              'ʿ': '', 'ʾ': '',
+              'ā': 'a', 'Ā': 'A',
+              'ī': 'i', 'Ī': 'I',
+              'ū': 'u', 'Ū': 'U',
+              'ē': 'e', 'Ē': 'E',
+              'ō': 'o', 'Ō': 'O'
+            };
+            s = s.replace(/[ḵḴḥḤṣṢḍḌṭṬẓẒġĠʿʾāĀīĪūŪēĒōŌ]/g, (m) => charMap[m] || m);
+            s = s.replace(/\bhay\b/gi, 'hai');
+            s = s.replace(/\bkask\b/gi, 'kasak');
+            s = s.replace(/\bqasm\b/gi, 'qasam');
+            s = s.replace(/\bqsm\b/gi, 'qasam');
+            s = s.replace(/\bbagichay\b/gi, 'bagichai');
+            s = s.replace(/\s+/g, ' ').trim();
+            if (/[\u0980-\u09FF]/.test(origText || '')) {
+              return s.split(' ').map((w) => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : '').join(' ');
+            }
+            return s.charAt(0).toUpperCase() + s.slice(1);
+          };
+
           const joinedSignature = validItems.map(item => item.text).join('|');
           const hash = Array.from(joinedSignature.slice(0, 100)).reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) >>> 0, 0);
-          const cacheKey = `trans_v2_${target}_${hash}_${validItems.length}`;
+          const cacheKey = `trans_v5_${target}_${hash}_${validItems.length}`;
 
           const cached = await redisGet(env, cacheKey);
           if (cached && typeof cached === 'object' && Array.isArray(cached.translations)) {
@@ -507,91 +540,35 @@ export default {
             return res;
           };
 
-          const chunks = chunkArray(validItems, 25);
+          const chunks = chunkArray(validItems, 8);
           const translationsMap = {};
           const romanizedMap = {};
           let detectedSourceLang = null;
 
           for (const chunk of chunks) {
-            const numberedText = chunk.map((item, idx) => `${idx}___ ${item.text}`).join('\n');
-            const clients = ['dict-chrome-ex', 'at'];
-            let chunkSuccess = false;
-
-            for (const clientName of clients) {
-              try {
-                const gUrl = `https://translate.googleapis.com/translate_a/single?client=${clientName}&sl=auto&tl=${encodeURIComponent(target)}&dt=t&dt=rm`;
-                const gRes = await fetch(gUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                  },
-                  body: `q=${encodeURIComponent(numberedText)}`
-                });
-
-                if (gRes.ok) {
-                  const gData = await gRes.json();
-                  if (gData && Array.isArray(gData[0])) {
-                    if (gData[2]) detectedSourceLang = gData[2];
-                    const fullTrans = gData[0].map(x => x[0]).filter(Boolean).join('');
-                    const fullRoman = gData[0].map(x => x[3]).filter(Boolean).join('');
-
-                    const transLines = fullTrans.split('\n');
-                    for (const tLine of transLines) {
-                      const match = tLine.match(/^\s*(\d+)___\s*(.*)$/);
-                      if (match) {
-                        const localIdx = parseInt(match[1], 10);
-                        if (chunk[localIdx]) {
-                          translationsMap[chunk[localIdx].originalIndex] = match[2].trim();
-                        }
+            await Promise.all(
+              chunk.map(async (item) => {
+                const clients = ['dict-chrome-ex', 'gtx'];
+                for (const clientName of clients) {
+                  try {
+                    const sUrl = `https://translate.googleapis.com/translate_a/single?client=${clientName}&sl=auto&tl=${encodeURIComponent(target)}&dt=t&dt=rm&q=${encodeURIComponent(item.text)}`;
+                    const sRes = await fetch(sUrl);
+                    if (sRes.ok) {
+                      const sData = await sRes.json();
+                      if (sData?.[0]?.[0]?.[0]) {
+                        translationsMap[item.originalIndex] = sData[0][0][0].trim();
                       }
+                      const romanTuple = sData?.[0]?.find((x) => Array.isArray(x) && typeof x[3] === 'string');
+                      if (romanTuple?.[3]) {
+                        romanizedMap[item.originalIndex] = romanTuple[3].trim();
+                      }
+                      if (sData?.[2]) detectedSourceLang = sData[2];
+                      break;
                     }
-
-                    const romanLines = fullRoman.split('\n');
-                    for (const rLine of romanLines) {
-                      const match = rLine.match(/^\s*(\d+)___\s*(.*)$/);
-                      if (match) {
-                        const localIdx = parseInt(match[1], 10);
-                        if (chunk[localIdx]) {
-                          romanizedMap[chunk[localIdx].originalIndex] = match[2].trim();
-                        }
-                      }
-                    }
-
-                    chunk.forEach((item, localIdx) => {
-                      if (!translationsMap[item.originalIndex] && transLines[localIdx]) {
-                        translationsMap[item.originalIndex] = transLines[localIdx].replace(/^\s*\d+___\s*/, '').trim();
-                      }
-                      if (!romanizedMap[item.originalIndex] && romanLines[localIdx]) {
-                        romanizedMap[item.originalIndex] = romanLines[localIdx].replace(/^\s*\d+___\s*/, '').trim();
-                      }
-                    });
-
-                    chunkSuccess = true;
-                    break;
-                  }
+                  } catch {}
                 }
-              } catch {}
-            }
-
-            if (!chunkSuccess) {
-              try {
-                for (const item of chunk) {
-                  const sUrl = `https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=${encodeURIComponent(target)}&dt=t&dt=rm&q=${encodeURIComponent(item.text)}`;
-                  const sRes = await fetch(sUrl);
-                  if (sRes.ok) {
-                    const sData = await sRes.json();
-                    if (sData?.[0]?.[0]?.[0]) {
-                      translationsMap[item.originalIndex] = sData[0][0][0].trim();
-                    }
-                    if (sData?.[0]?.[1]?.[3]) {
-                      romanizedMap[item.originalIndex] = sData[0][1][3].trim();
-                    }
-                    if (sData?.[2]) detectedSourceLang = sData[2];
-                  }
-                }
-              } catch {}
-            }
+              })
+            );
           }
 
           const finalTranslations = new Array(lines.length).fill('');
@@ -599,7 +576,9 @@ export default {
 
           for (let i = 0; i < lines.length; i++) {
             finalTranslations[i] = translationsMap[i] || '';
-            finalRomanized[i] = romanizedMap[i] || '';
+            const rawRom = romanizedMap[i] || '';
+            const origText = typeof lines[i] === 'string' ? lines[i] : lines[i]?.text || '';
+            finalRomanized[i] = rawRom ? formatRomanizedLyric(rawRom, origText) : '';
           }
 
           const payload = {
@@ -608,7 +587,7 @@ export default {
             detectedLang: detectedSourceLang || 'auto'
           };
 
-          if (Object.keys(translationsMap).length > 0) {
+          if (finalTranslations.some(Boolean) || finalRomanized.some(Boolean)) {
             await redisSet(env, cacheKey, payload, 604800);
           }
 
@@ -731,8 +710,10 @@ export default {
 
           const cleanId = String(id).trim();
           const cacheKey = `track_detail_${cleanId}`;
-          const cached = await redisGet(env, cacheKey);
+          const forceRefresh = url.searchParams.get('refresh') === 'true';
+          const cached = forceRefresh ? null : await redisGet(env, cacheKey);
           if (cached) {
+            if (cached.isYouTube) cached.streamUrl = null;
             return jsonResponse(cached, 200, {
               'X-Cache': 'HIT-REDIS',
               'Cache-Control': 'public, max-age=86400'
@@ -787,7 +768,7 @@ export default {
               cover,
               thumbnail: cover,
               url: `https://www.youtube.com/watch?v=${videoId}`,
-              streamUrl: `${url.origin}/api/youtube/stream?videoId=${videoId}`,
+              streamUrl: null,
               isYouTube: true,
               duration
             };
