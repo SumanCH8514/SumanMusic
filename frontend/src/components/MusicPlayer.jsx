@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import {
-  Play, Pause, SkipBack, SkipForward, Repeat, Shuffle,
+  Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle,
   Volume2, VolumeX, Maximize2, ChevronDown, MoreHorizontal,
   ListMusic, Share2, Heart, Loader2, ListPlus, PlusCircle,
   Download, FolderPlus, Disc, User, Info, X, RefreshCw, ChevronRight, CheckCircle, Mic, Mic2, Zap, Gauge, Sliders, HardDrive
@@ -528,12 +528,12 @@ const ArtistLinks = memo(({ artist, onArtistClick, className = '', linkClassName
 });
 
 const PlayerHero = memo(({ activeSong, likedSongs, toggleLike, onArtistClick }) => (
-  <div className="flex-1 flex flex-col justify-end md:justify-center w-full max-w-2xl min-h-0 pt-2 pb-2 md:py-8 relative">
-    <div className="relative w-full flex-1 min-h-0 flex items-center justify-center mb-6 md:mb-8 group px-8 md:px-0">
+  <div className="flex-1 flex flex-col justify-center w-full max-w-2xl min-h-0 py-1 md:py-8 relative">
+    <div className="relative w-full flex-1 min-h-0 flex items-center justify-center mb-3 sm:mb-4 md:mb-8 group px-6 sm:px-8 md:px-0">
       <div className="absolute inset-0 bg-primary/25 blur-[120px] rounded-full opacity-40 group-hover:opacity-70 transition-opacity duration-1000 hidden md:block" />
       <motion.div
         key={activeSong.id + 'artwork'}
-        className="relative z-10 w-full h-full max-w-[500px] md:max-w-[440px] flex items-center justify-center"
+        className="relative z-10 w-full h-full max-h-[38vh] sm:max-h-[44vh] md:max-h-none max-w-[min(84vw,38vh)] sm:max-w-[min(84vw,44vh)] md:max-w-[440px] aspect-square flex items-center justify-center mx-auto"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
@@ -541,25 +541,24 @@ const PlayerHero = memo(({ activeSong, likedSongs, toggleLike, onArtistClick }) 
         <SongImage
           src={activeSong.cover}
           alt={activeSong.title}
-          className="rounded-md shadow-2xl md:rounded-[3.5rem] md:shadow-[0_50px_100px_rgba(0,0,0,0.4)] dark:md:shadow-[0_50px_100px_rgba(0,0,0,0.7)] md:border md:border-border-main/10 group-hover:rotate-2 group-hover:scale-105 transition-all duration-700 ease-out"
-          style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', objectFit: 'cover', aspectRatio: '1/1' }}
+          className="w-full h-full object-cover rounded-2xl shadow-2xl shadow-black/60 md:rounded-[3.5rem] md:shadow-[0_50px_100px_rgba(0,0,0,0.4)] dark:md:shadow-[0_50px_100px_rgba(0,0,0,0.7)] md:border md:border-border-main/10 md:group-hover:rotate-2 md:group-hover:scale-105 transition-all duration-700 ease-out aspect-square"
         />
       </motion.div>
     </div>
 
-    <div className="w-full px-8 md:px-0 relative z-10 text-left md:text-center mt-auto flex-shrink-0">
+    <div className="w-full px-6 sm:px-8 md:px-0 relative z-10 text-left md:text-center mt-auto flex-shrink-0">
       <motion.div
         key={activeSong.id + 'info'}
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
         className="flex flex-col md:items-center gap-1 md:gap-3 w-full"
       >
         <MarqueeTitle
           text={activeSong.title}
-          className="text-2xl md:text-3xl font-bold text-text-primary tracking-tight"
+          className="text-[22px] sm:text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight"
         />
-        <div className="flex items-center gap-3 text-text-secondary/60 text-base md:text-sm font-normal tracking-tight truncate w-full md:justify-center">
+        <div className="flex items-center gap-3 text-text-secondary/70 text-sm sm:text-base font-medium tracking-normal truncate w-full md:justify-center">
           <span className="truncate">
             <ArtistLinks artist={activeSong.artist} onArtistClick={onArtistClick} truncate />
           </span>
@@ -836,7 +835,7 @@ const LyricsPanel = memo(({
 });
 
 const TimeDisplay = memo(({ currentTime, duration }) => (
-  <div className="flex justify-between text-[11px] font-medium text-text-secondary/50 tracking-wide mt-1.5">
+  <div className="flex justify-between text-xs font-medium text-text-secondary/60 tracking-normal -mt-1 select-none">
     <span>{formatTime(currentTime)}</span>
     <span>{formatTime(duration)}</span>
   </div>
@@ -948,15 +947,15 @@ const ProgressBar = memo(({ progress, seek }) => {
       onPointerDown={handlePointerDown}
       className="relative w-full h-6 flex items-center cursor-pointer group touch-none select-none"
     >
-      <div className="w-full h-[3px] bg-border-main/20 group-hover:h-[5px] rounded-full relative overflow-hidden transition-all">
+      <div className="w-full h-[3px] bg-white/15 group-hover:h-[4px] rounded-full relative overflow-hidden transition-all">
         <div
           className="absolute left-0 top-0 bottom-0 bg-primary rounded-full"
           style={{ width: `${progress}%` }}
         />
       </div>
       <div
-        className="w-3.5 h-3.5 bg-white rounded-full opacity-0 group-hover:opacity-100 shadow-md transition-opacity absolute top-1/2 -translate-y-1/2 pointer-events-none"
-        style={{ left: `calc(${progress}% - 7px)` }}
+        className="w-3 h-3 bg-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 shadow-md transition-opacity absolute top-1/2 -translate-y-1/2 pointer-events-none"
+        style={{ left: `calc(${progress}% - 6px)` }}
       />
     </div>
   );
@@ -965,37 +964,65 @@ const ProgressBar = memo(({ progress, seek }) => {
 const PlaybackControls = memo(({
   isShuffle, setIsShuffle, playPrevious, togglePlay, isBuffering, isPlaying, playNext, repeatMode, setRepeatMode
 }) => (
-  <div className="flex items-center justify-between w-full px-0">
-    <Shuffle
-      className={cn("w-[22px] h-[22px] transition-colors cursor-pointer", isShuffle ? "text-primary" : "text-text-secondary/40 hover:text-text-primary")}
+  <div className="flex items-center justify-between w-full px-0 select-none">
+    <button
       onClick={() => setIsShuffle(!isShuffle)}
-    />
-    <div className="flex items-center gap-7 md:gap-10">
-      <SkipBack className="w-8 h-8 text-text-primary fill-current hover:text-primary transition-colors cursor-pointer active:scale-90" onClick={playPrevious} />
+      className="p-2 -ml-2 rounded-full hover:bg-white/10 active:scale-90 transition-all"
+      aria-label="Shuffle"
+    >
+      <Shuffle
+        className={cn("w-[22px] h-[22px] transition-colors", isShuffle ? "text-primary" : "text-text-secondary/50 hover:text-text-primary")}
+      />
+    </button>
+
+    <div className="flex items-center gap-6 sm:gap-8 md:gap-10">
+      <button
+        onClick={playPrevious}
+        className="p-2 rounded-full hover:bg-white/10 active:scale-90 transition-all text-text-primary"
+        aria-label="Previous track"
+      >
+        <SkipBack className="w-7 h-7 sm:w-8 sm:h-8 fill-current hover:text-primary transition-colors cursor-pointer" />
+      </button>
 
       <button
-        className="group relative"
+        className="group relative active:scale-95 transition-transform"
         onClick={togglePlay}
         disabled={isBuffering}
+        aria-label={isPlaying ? 'Pause' : 'Play'}
       >
-        <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full scale-150 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block" />
-        <div className="relative w-[72px] h-[72px] md:w-16 md:h-16 rounded-full bg-text-primary flex items-center justify-center shadow-xl group-active:scale-95 transition-transform overflow-hidden">
+        <div className="w-16 h-16 sm:w-[70px] sm:h-[70px] rounded-full bg-white text-black flex items-center justify-center shadow-xl shadow-black/40 overflow-hidden">
           {isBuffering ? (
-            <Loader2 className="w-8 h-8 text-bg-surface animate-spin" />
+            <Loader2 className="w-7 h-7 sm:w-8 sm:h-8 animate-spin text-black" />
           ) : isPlaying ? (
-            <Pause className="text-bg-surface w-8 h-8 fill-current" />
+            <Pause className="w-7 h-7 sm:w-8 sm:h-8 fill-black text-black" />
           ) : (
-            <Play className="text-bg-surface w-8 h-8 fill-current ml-1" />
+            <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-black text-black ml-1" />
           )}
         </div>
       </button>
 
-      <SkipForward className="w-8 h-8 text-text-primary fill-current hover:text-primary transition-colors cursor-pointer active:scale-90" onClick={playNext} />
+      <button
+        onClick={playNext}
+        className="p-2 rounded-full hover:bg-white/10 active:scale-90 transition-all text-text-primary"
+        aria-label="Next track"
+      >
+        <SkipForward className="w-7 h-7 sm:w-8 sm:h-8 fill-current hover:text-primary transition-colors cursor-pointer" />
+      </button>
     </div>
-    <Repeat
-      className={cn("w-[22px] h-[22px] transition-colors cursor-pointer", repeatMode !== 'none' ? "text-primary" : "text-text-secondary/40 hover:text-text-primary")}
+
+    <button
       onClick={() => setRepeatMode(repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none')}
-    />
+      className="p-2 -mr-2 rounded-full hover:bg-white/10 active:scale-90 transition-all"
+      aria-label="Repeat"
+    >
+      {repeatMode === 'one' ? (
+        <Repeat1 className="w-[22px] h-[22px] text-primary transition-colors" />
+      ) : (
+        <Repeat
+          className={cn("w-[22px] h-[22px] transition-colors", repeatMode === 'all' ? "text-primary" : "text-text-secondary/50 hover:text-text-primary")}
+        />
+      )}
+    </button>
   </div>
 ));
 
@@ -1944,24 +1971,14 @@ const MusicPlayer = () => {
                         </button>
 
                         <button
-                          className={cn(
-                            "w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90 md:hidden",
-                            (lyrics.length > 0 || isLyricsLoading) ? "text-text-primary hover:bg-white/10" : "text-text-primary/30 cursor-default"
-                          )}
+                          className="w-10 h-10 flex items-center justify-center rounded-full text-text-primary hover:bg-white/10 transition-all active:scale-90 md:hidden"
                           onClick={() => {
-                            if (lyrics.length > 0 || isLyricsLoading) {
-                              setActiveTab('lyrics');
-                              setIsTabCollapsed(false);
-                              setTimeout(() => document.getElementById('mobile-tab-content')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-                            }
+                            setActiveTab('upnext');
+                            setIsTabCollapsed(false);
                           }}
-                          aria-label="Lyrics"
+                          aria-label="Up next queue"
                         >
-                          {isLyricsLoading ? (
-                            <Loader2 className="w-5 h-5 text-text-primary animate-spin" />
-                          ) : (
-                            <ListMusic className="w-5 h-5" />
-                          )}
+                          <ListMusic className="w-5 h-5" />
                         </button>
 
                         <button
@@ -1977,12 +1994,12 @@ const MusicPlayer = () => {
                       </div>
                     </div>
 
-                    <div className="flex-1 flex items-center justify-center min-h-0 w-full max-w-7xl mx-auto px-0 md:px-8 pb-4">
+                    <div className="flex-1 flex items-center justify-center min-h-0 w-full max-w-7xl mx-auto px-0 md:px-8 pb-2 sm:pb-4">
                       <PlayerHero activeSong={activeSong} likedSongs={likedSongs} toggleLike={toggleLike} onArtistClick={navigateToArtist} />
                     </div>
 
-                    <div className="w-full max-w-5xl mx-auto pb-4 md:pb-0 relative z-30 px-8 md:px-0 flex-shrink-0">
-                      <div className="flex flex-col gap-6 md:gap-4 w-full">
+                    <div className="w-full max-w-5xl mx-auto pb-2 sm:pb-4 md:pb-0 relative z-30 px-6 sm:px-8 md:px-0 flex-shrink-0">
+                      <div className="flex flex-col gap-3 sm:gap-5 md:gap-4 w-full">
                         <div className="w-full">
                           <ProgressBar progress={progress} seek={seek} />
                           <TimeDisplay currentTime={currentTime} duration={duration} />
@@ -2002,13 +2019,16 @@ const MusicPlayer = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between w-full px-12 pb-6 pt-2 relative z-30 md:hidden flex-shrink-0">
+                    <div className="flex items-center justify-between w-full px-10 sm:px-14 pb-5 sm:pb-7 pt-2 relative z-30 md:hidden flex-shrink-0 select-none">
                       <button
                         onClick={() => {
                           setActiveTab('upnext');
                           setIsTabCollapsed(false);
                         }}
-                        className="text-[15px] font-bold text-white/60 hover:text-white transition-colors cursor-pointer"
+                        className={cn(
+                          "text-[14px] sm:text-[15px] font-semibold transition-colors cursor-pointer",
+                          activeTab === 'upnext' && !isTabCollapsed ? "text-white" : "text-white/60 hover:text-white"
+                        )}
                       >
                         Up next
                       </button>
@@ -2017,7 +2037,10 @@ const MusicPlayer = () => {
                           setActiveTab('lyrics');
                           setIsTabCollapsed(false);
                         }}
-                        className="text-[15px] font-bold text-white/60 hover:text-white transition-colors cursor-pointer"
+                        className={cn(
+                          "text-[14px] sm:text-[15px] font-semibold transition-colors cursor-pointer",
+                          activeTab === 'lyrics' && !isTabCollapsed ? "text-white" : "text-white/60 hover:text-white"
+                        )}
                       >
                         Lyrics
                       </button>
@@ -2026,7 +2049,10 @@ const MusicPlayer = () => {
                           setActiveTab('related');
                           setIsTabCollapsed(false);
                         }}
-                        className="text-[15px] font-bold text-white/60 hover:text-white transition-colors cursor-pointer"
+                        className={cn(
+                          "text-[14px] sm:text-[15px] font-semibold transition-colors cursor-pointer",
+                          activeTab === 'related' && !isTabCollapsed ? "text-white" : "text-white/60 hover:text-white"
+                        )}
                       >
                         Related
                       </button>
