@@ -26,12 +26,19 @@ const cleanTitle = (title) => {
     .trim();
 };
 
-const getLyricsScore = (synced, plain) => {
-  const text = synced || plain || '';
-  if (!text) return -1000;
-  let score = 0;
-  if (synced) score += 500;
-  return score;
+const isTitleMatch = (queryTitle, candidateTitle) => {
+  if (!queryTitle || !candidateTitle) return false;
+  const norm1 = queryTitle.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+  const norm2 = candidateTitle.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+  if (!norm1 || !norm2) return false;
+  if (norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1)) return true;
+  const words1 = queryTitle.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  const words2 = candidateTitle.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  if (words1.length > 0 && words2.length > 0) {
+    const overlap = words1.filter(w => words2.includes(w));
+    if (overlap.length >= Math.min(words1.length, words2.length) * 0.5) return true;
+  }
+  return false;
 };
 
 export const interpolateLineWords = (text, lineTime, lineDuration) => {
@@ -270,7 +277,7 @@ const fetchLyricsLrcRedClient = async (artist, title) => {
     if (matchRes.ok) {
       const matchData = await matchRes.json();
       if (Array.isArray(matchData.hits) && matchData.hits.length > 0) {
-        hit = matchData.hits[0];
+        hit = matchData.hits.find(h => isTitleMatch(cTitle, h.title));
       }
     }
 
@@ -280,7 +287,7 @@ const fetchLyricsLrcRedClient = async (artist, title) => {
       if (searchRes.ok) {
         const searchData = await searchRes.json();
         if (Array.isArray(searchData.hits) && searchData.hits.length > 0) {
-          hit = searchData.hits[0];
+          hit = searchData.hits.find(h => isTitleMatch(cTitle, h.title));
         }
       }
     }
@@ -316,19 +323,27 @@ const fetchLyricsLrcLibSearch = async (artist, title) => {
     const data = await response.json();
     if (data && data.length > 0) {
       const sortedResults = [...data].sort((a, b) => {
-        const scoreA = getLyricsScore(a.syncedLyrics, a.plainLyrics);
-        const scoreB = getLyricsScore(b.syncedLyrics, b.plainLyrics);
-        return scoreB - scoreA;
+        const aSync = !!a.syncedLyrics;
+        const bSync = !!b.syncedLyrics;
+        if (aSync && !bSync) return -1;
+        if (!aSync && bSync) return 1;
+        const aMatch = isTitleMatch(cleanTitle(title), a.trackName) ? 1 : 0;
+        const bMatch = isTitleMatch(cleanTitle(title), b.trackName) ? 1 : 0;
+        return bMatch - aMatch;
       });
-      const result = sortedResults[0];
-      const parsedLines = parseLrc(result.syncedLyrics);
-      return {
-        type: parsedLines.length > 0 ? 'line' : 'plain',
-        source: 'lrclib',
-        lines: parsedLines,
-        syncedLyrics: result.syncedLyrics || '',
-        plainLyrics: result.plainLyrics || ''
-      };
+      const best = sortedResults.find(r => r.syncedLyrics || r.plainLyrics);
+      if (best) {
+        const parsedLines = parseLrc(best.syncedLyrics);
+        if (parsedLines.length > 0 || best.plainLyrics) {
+          return {
+            type: parsedLines.length > 0 ? 'line' : 'plain',
+            source: 'lrclib',
+            lines: parsedLines,
+            syncedLyrics: best.syncedLyrics || '',
+            plainLyrics: best.plainLyrics || ''
+          };
+        }
+      }
     }
     return null;
   } catch {
@@ -357,7 +372,7 @@ const fetchLyricsOvh = async (artist, title) => {
 
 export const fetchLyrics = async (artist, title, album = '', duration = 0, source = 'auto', forceReload = false) => {
   if (!title) return null;
-  const cacheKey = `lyrics_v2_${cleanArtist(artist)}_${cleanTitle(title)}_${source}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const cacheKey = `lyrics_v3_${cleanArtist(artist)}_${cleanTitle(title)}_${source}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
   if (!forceReload) {
     const cached = await redisGet(cacheKey);
@@ -400,14 +415,6 @@ export const fetchLyrics = async (artist, title, album = '', duration = 0, sourc
     }
   } catch {}
 
-  if (!lyricsData && (source === 'auto' || source === 'binilyrics')) {
-    lyricsData = await fetchLyricsPlusClient(artist, title, duration);
-  }
-
-  if (!lyricsData && (source === 'auto' || source === 'lrcred')) {
-    lyricsData = await fetchLyricsLrcRedClient(artist, title);
-  }
-
   if (!lyricsData && (source === 'auto' || source === 'lrclib')) {
     const metaVariants = [
       { a: artist, t: title, alb: album },
@@ -446,6 +453,14 @@ export const fetchLyrics = async (artist, title, album = '', duration = 0, sourc
 
   if (!lyricsData && (source === 'auto' || source === 'lrclib')) {
     lyricsData = await fetchLyricsLrcLibSearch(artist, title);
+  }
+
+  if (!lyricsData && (source === 'auto' || source === 'binilyrics')) {
+    lyricsData = await fetchLyricsPlusClient(artist, title, duration);
+  }
+
+  if (!lyricsData && (source === 'auto' || source === 'lrcred')) {
+    lyricsData = await fetchLyricsLrcRedClient(artist, title);
   }
 
   if (!lyricsData && (source === 'auto' || source === 'ovh')) {

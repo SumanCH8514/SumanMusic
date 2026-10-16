@@ -60,7 +60,14 @@ export const LyricsFloatingMenu = memo(({
       label: 'Smart Auto',
       badge: 'RECOMMENDED',
       badgeStyle: 'bg-primary/20 text-primary border-primary/30',
-      desc: 'Prioritizes true syllable & word sync'
+      desc: 'Smart fallbacks Approach'
+    },
+    {
+      id: 'lrclib',
+      label: 'LRCLib Database',
+      badge: 'SYNCED',
+      badgeStyle: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+      desc: 'Line-level sync with karaoke sweep'
     },
     {
       id: 'binilyrics',
@@ -75,13 +82,6 @@ export const LyricsFloatingMenu = memo(({
       badge: 'ENHANCED',
       badgeStyle: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
       desc: 'Apple Music synced timestamps'
-    },
-    {
-      id: 'lrclib',
-      label: 'LRCLib Database',
-      badge: 'SYNCED',
-      badgeStyle: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-      desc: 'Line-level sync with karaoke sweep'
     },
     {
       id: 'ovh',

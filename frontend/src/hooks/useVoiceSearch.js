@@ -1,21 +1,18 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-/**
- * Custom hook for Voice Search using the Web Speech API.
- */
 export const useVoiceSearch = ({ onResult, onError }) => {
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef(null);
 
     const startListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        
+
         if (!SpeechRecognition) {
             if (onError) onError("not-supported");
             return;
         }
 
-        // Always create a fresh instance for mobile compatibility
+
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = true;
@@ -58,9 +55,9 @@ export const useVoiceSearch = ({ onResult, onError }) => {
         };
     }, []);
 
-    return { 
-        isListening, 
-        startListening, 
+    return {
+        isListening,
+        startListening,
         stopListening,
         isSupported: !!(window.SpeechRecognition || window.webkitSpeechRecognition)
     };

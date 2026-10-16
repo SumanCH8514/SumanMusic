@@ -437,7 +437,7 @@ export default {
 
           const cleanA = artist.split(/\s*,\s*|\s*&\s*|\s+and\s+/i)[0].replace(/\s*(?:feat|ft)\.?.*$/i, "").trim().toLowerCase();
           const cleanT = title.replace(/\s*\(.*?\)/g, '').replace(/\s*\[.*?\]/g, '').trim().toLowerCase();
-          const cacheKey = `lyrics_v2_${cleanA}_${cleanT}_${source}`.replace(/[^a-z0-9]/g, '_');
+          const cacheKey = `lyrics_v3_${cleanA}_${cleanT}_${source}`.replace(/[^a-z0-9]/g, '_');
 
           if (!forceReload) {
             const cached = await redisGet(env, cacheKey);
